@@ -3,11 +3,10 @@ import math
 import types
 import time
 
-import moderngl
 import numpy as np
 from PySide6.QtCore import QEvent, QPointF, QRectF, QSettings, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QImage, QPainter, QPainterPath, QPen, QPolygonF, QSurfaceFormat
-from PySide6.QtOpenGLWidgets import QOpenGLWidget
+from .backend import GPUBackend, USE_METAL  # Native MetalKit or OpenGL
 from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QHBoxLayout,
                                QInputDialog, QLabel, QMenu, QSlider, QWidget, QWidgetAction)
 

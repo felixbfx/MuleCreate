@@ -1,4 +1,5 @@
 """Projection, rays and picking: what lies under the cursor (lines, surfaces, meshes, planes)."""
+import os
 from .common import *  # noqa: F401,F403
 from ..i18n import tr
 
@@ -115,11 +116,6 @@ class PickingMixin:
         pw, ph = int(self.width() * dpr), int(self.height() * dpr)
         return int(pos.x() * dpr), ph - 1 - int(pos.y() * dpr), (pw, ph)
 
-    def _unbind_vao(self):
-        """moderngl leaves its last vertex array bound. Qt's QPainter would write its own
-        attributes into it and destroy it -> always unbind after own GL."""
-        self.context().extraFunctions().glBindVertexArray(0)
-
     def _mesh_samples(self, samples, meshes=None, exact=True):
         """For each screen point (mesh, point, distance) of the frontmost hit under
         meshes (default: all visible), otherwise (None, None, None). One GPU readback."""
@@ -129,15 +125,28 @@ class PickingMixin:
             return misses
         phys = np.array([self._physical(s)[:2] for s in samples])
         size = self._physical(QPointF())[2]
-        self.makeCurrent()
-        self.renderer.update_pick(size, self.cam, self._projection(), meshes)
-        data, prims = self.renderer.read_pick_points(phys)  # only these pixels, not the rectangle around them
-        self._unbind_vao()
-        self.doneCurrent()
+        ctx=self.renderer.ctx
+        use_rt=bool(getattr(ctx,"supports_raytracing",False)) and os.environ.get("MULE_METALRT","1")!="0"
+        def gpu():
+            if use_rt:
+                dpr=self.devicePixelRatioF()
+                # Match raster pixel centers, including Retina. Exact drawing surfaces are refined below.
+                rays=[self.ray(QPointF((int(s.x()*dpr)+.5)/dpr,(int(s.y()*dpr)+.5)/dpr)) for s in samples]
+                origins=np.asarray([r[0] for r in rays]);dirs=np.asarray([r[1] for r in rays])
+                if self.cam.ortho:
+                    near,far=0.,2*self._ortho_depth()
+                else:
+                    forward=np.maximum(dirs@(-self.cam.back),1e-8)
+                    near,far=self._near()/forward,self._far()/forward
+                return ctx.ray_pick(meshes,origins,dirs,near,far)
+            self.renderer.update_pick(size, self.cam, self._projection(), meshes)
+            return self.renderer.read_pick_points(phys)  # only these pixels, not the rectangle around them
+        data, prims = self._with_gpu(gpu)
         out, rays, exact_jobs = [], [], {}
         for k, s in enumerate(samples):
             px = data[k]
-            mesh = self.renderer.pick_mesh(int(round(float(px[3]))))
+            index=int(round(float(px[3])))
+            mesh = (meshes[index-1] if 0<index<=len(meshes) else None) if use_rt else self.renderer.pick_mesh(index)
             mesh = getattr(mesh, "owner", mesh)  # surface proxy -> surface
             if mesh is None:
                 out.append((None, None, None))

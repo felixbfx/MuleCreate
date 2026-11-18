@@ -1224,6 +1224,8 @@ class NotesTool:
         px = abs(s[1][1] - s[0][1]) if ok.all() else 24
         px = min(max(px * 0.8, 14), 48)
         ed = QLineEdit(vp)
+        if vp.testAttribute(Qt.WA_NativeWindow):
+            ed.setAttribute(Qt.WA_NativeWindow, True)
         ed.setFrame(False)
         ed.setFont(note_font(px))
         ed.setText(note.title)
@@ -1239,6 +1241,7 @@ class NotesTool:
         ed.installEventFilter(_EscapeFilter(ed, self.cancel_edit, self._focus_lost))
         self.editor = (ed, nid, new, note.title)
         ed.show()
+        ed.raise_()
         ed.setFocus()
         ed.selectAll()
         vp.notify(tr("Überschrift tippen – Enter: fertig · Esc: abbrechen"))

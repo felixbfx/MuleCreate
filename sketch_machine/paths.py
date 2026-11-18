@@ -16,8 +16,13 @@ LOG_NAME = "mule.log"
 
 def doc_path(*parts):
     """Documentation next to the program: in the repo its root, installed the folder of Mule.exe (docs/,
-    AI_HANDBOOK.md – the release copies them there)."""
-    base = os.path.dirname(sys.executable) if FROZEN else ROOT
+    AI_HANDBOOK.md – the release copies them there). In the macOS app bundle the spec puts them into
+    Contents/Resources (reached through sys._MEIPASS), as nothing but code may sit next to the executable;
+    the third-party licenses (THIRD_PARTY_NOTICES.md, LICENSE.txt, licenses/) live in the same folder."""
+    if FROZEN and sys.platform == "darwin":
+        base = ROOT
+    else:
+        base = os.path.dirname(sys.executable) if FROZEN else ROOT
     return os.path.join(base, *parts)
 
 

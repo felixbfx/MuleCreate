@@ -1,5 +1,5 @@
 """Self-test of the finished package: mule --selftest <result.json>. On a fresh machine it checks what can get lost
-during packaging (OpenGL, USD, bible, brief export) and exits like normal; real settings stay
+during packaging (GPU rendering, MetalRT, USD, bible, brief export) and exits like normal; real settings stay
 untouched, no dialogs."""
 import json
 import os
@@ -49,7 +49,14 @@ def run(window, app, out):
         window.show()
         pump()
         image = window.viewport.grabFramebuffer()
+        renderer = window.viewport.renderer
+        assert renderer is not None, window.viewport._gl_error
         assert image.width() > 0 and image.height() > 0
+        result["gpu"] = dict(renderer.ctx.info)
+        from .vp.backend import backend_name
+        result["gpu"]["backend"] = backend_name()
+        if os.environ.get("MULE_GPU") in ("metal","native"):
+            assert getattr(renderer.ctx,"native_metal",False), "Native Metal renderer was not initialized"
         return f"{image.width()}x{image.height()}"
 
     def usd():
@@ -61,6 +68,23 @@ def run(window, app, out):
     def bible():
         assert os.path.isfile(brief.BIBLE) and os.access(brief.BIBLE, os.W_OK), brief.BIBLE
         return brief.BIBLE
+
+    def metalrt():
+        import numpy as np
+        ctx=window.viewport.renderer.ctx
+        if not getattr(ctx,"native_metal",False): return "Qt/GL fallback"
+        stats=ctx.diagnostics()
+        assert stats["draws"]>0 and stats["frames"]>0,stats
+        if not ctx.supports_raytracing or os.environ.get("MULE_METALRT","1")=="0": return stats
+        meshes=window.viewport._pick_items(window.viewport._pickables())
+        mesh=next(m for m in meshes if m.geo is not None and len(m.geo.faces))
+        triangle=mesh.geo.vertices[mesh.geo.faces[0]].astype(float)
+        triangle=triangle@mesh.xform[:3,:3].T+mesh.xform[:3,3]
+        center=triangle.mean(axis=0);normal=np.cross(triangle[1]-triangle[0],triangle[2]-triangle[0]);normal/=np.linalg.norm(normal)
+        data,_=window.viewport._with_gpu(lambda:ctx.ray_pick(meshes,[center+normal],[ -normal]))
+        assert data[0,3]>0,data
+        result["gpu"]["native_diagnostics"]=ctx.diagnostics()
+        return ctx.diagnostics()
 
     def export():
         target = os.path.join(folder, "selftest_brief")
@@ -105,7 +129,7 @@ def run(window, app, out):
     def licenses():
         if not getattr(sys, "frozen", False):
             return "only in the package"
-        bundle = os.path.dirname(sys.executable)
+        bundle = paths.doc_path()  # next to Mule.exe; in Mule.app: Contents/Resources
         with open(os.path.join(bundle, "THIRD_PARTY_NOTICES.md"), encoding="utf-8") as fh:
             text = fh.read()
         for needed in ("PySide6", "usd-core", "numpy", "Python", "FFmpeg", "General Public License v3.0"):
@@ -116,7 +140,7 @@ def run(window, app, out):
             assert os.path.isfile(os.path.join(bundle, "licenses", name)), name
         return len(os.listdir(os.path.join(bundle, "licenses")))
 
-    for name, fn in (("opengl", opengl), ("usd", usd), ("bible", bible), ("brief", export), ("manual", manual),
+    for name, fn in (("opengl", opengl), ("usd", usd), ("metalrt",metalrt), ("bible", bible), ("brief", export), ("manual", manual),
                      ("scene", scene_file), ("video", videos), ("start_animation", animation), ("recording", recording),
                      ("licenses", licenses)):
         check(name, fn)

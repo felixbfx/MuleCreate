@@ -101,8 +101,7 @@ def test_frame_change_does_not_rebuild_draw_lists(h: H):
     try:
         for k, frame in enumerate(range(1002, 1030, 3)):
             _draw(h, plane, frame, [(-2 + k * 0.2, 0), (0, 1 + k * 0.1), (2, 0)])
-        from PySide6.QtOpenGLWidgets import QOpenGLWidget
-        paint = lambda: QOpenGLWidget.grabFramebuffer(h.v)  # a frame like paintGL, without forcing a rebuild
+        paint = lambda: h.v.gpu_grab()  # a frame like paintGL, without forcing a rebuild
         h.v.set_frame(1001)
         h.grab()  # build everything once
         paint()

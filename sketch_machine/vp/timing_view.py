@@ -361,7 +361,7 @@ class TimingViewMixin:
             if vp._look is not None:
                 vp._apply_look()
             vp._frame_painted = False
-            QOpenGLWidget.update(vp)
+            vp.request_frame()
         self.ws.frame_changed.emit(frame)
         return True
 

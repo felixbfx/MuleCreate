@@ -1119,15 +1119,13 @@ def _visible_share(vp, target):
     if not mine or not alone:
         return 1.0
     size = vp._physical(QPointF())[2]
-    vp.makeCurrent()
-    try:
+    def gpu():
         vp.renderer.update_pick(size, vp.cam, vp._projection(), everything)
         front = int(np.isin(np.round(vp.renderer.read_pick(0, 0, *size)[0][..., 3]), mine).sum())
         vp.renderer.update_pick(size, vp.cam, vp._projection(), alone)
         total = int((np.round(vp.renderer.read_pick(0, 0, *size)[0][..., 3]) > 0).sum())
-    finally:
-        vp._unbind_vao()
-        vp.doneCurrent()
+        return front, total
+    front, total = vp._with_gpu(gpu)
     return front / total if total else 0.0
 
 

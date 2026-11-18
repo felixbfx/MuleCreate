@@ -55,22 +55,60 @@ Free to use, also commercially, under [CC BY 4.0](https://creativecommons.org/li
 [releases](https://github.com/felixbfx/MuleCreate/releases)), unzip it into a folder of its own and start `Mule\Mule.exe`. No Python needed. The program is not signed yet: on the first start Windows SmartScreen warns –
 click "More info", then "Run anyway".
 
-**From source (Windows):**
+**From source (Windows):** double-click `start.bat` in the repository root. It creates `.venv`, installs packages
+and launches Mule. Install Python 3.14 from python.org first; internet is needed for the initial package download.
+Keep the folder on a short path such as `C:\Mule` because Windows limits path length.
 
+**macOS: build and launch `Mule.app`**
+
+1. Install full **Xcode 27 or newer** from the Mac App Store or Apple Developer Downloads. Open it once and finish
+   the license and component setup. This checkout builds native Metal shaders with the macOS 27 SDK and MSL 4.1;
+   the standalone Command Line Tools are insufficient.
+2. Install [Homebrew](https://brew.sh/) if you do not already have it:
+
+   ```sh
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
+
+   Follow the installer's **Next steps** to add Homebrew to your shell's `PATH`, then open a new Terminal window.
+   Install [uv](https://docs.astral.sh/uv/getting-started/installation/):
+
+   ```sh
+   brew install uv
+   uv --version
+   ```
+
+3. Select Xcode and download its Metal toolchain (adjust the path if Xcode is installed elsewhere):
+
+   ```sh
+   sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+   sudo xcodebuild -runFirstLaunch
+   xcodebuild -downloadComponent metalToolchain
+   ```
+
+4. In the downloaded or cloned repository, run:
+
+   ```sh
+   ./start.sh
+   ```
+
+   The script uses `uv` to provide Python 3.14 and the pinned dependencies, builds `dist/Mule.app`, then launches
+   the executable inside that app. First use needs internet for downloads. Each run builds the app before launching;
+   you can also double-click the built `dist/Mule.app` directly. See [the macOS guide](docs/macos.md) for graphics
+   options and validation.
+
+**From source (Linux):** install [uv](https://docs.astral.sh/uv/getting-started/installation/) once:
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-py -3.14 -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python -m sketch_machine
-```
 
-or double-click `start.bat`: on the first start it sets up `.venv` itself (needs Python 3.14 from python.org
-and internet once; keep the folder on a short path such as `C:\Mule`, Windows limits path length).
+Follow the installer's shell instructions, then run `./start.sh` in the repository root. It uses `uv` to provide
+Python 3.14 and the packages in `requirements.txt`, then launches Mule from source. uv caches the environment;
+the system Python is not changed. If Qt reports "Could not load the Qt platform plugin xcb", install
+`libxcb-cursor0`; under Wayland try `QT_QPA_PLATFORM=xcb ./start.sh`.
 
-**From source (Linux):** `./start.sh`. On the first start it sets up its own Python 3.14 inside the project folder
-with [uv](https://docs.astral.sh/uv/) (internet needed once; the system Python is not touched). If Qt reports
-"Could not load the Qt platform plugin xcb", install `libxcb-cursor0`; under Wayland try `QT_QPA_PLATFORM=xcb ./start.sh`.
-
-Mule needs a graphics card with **OpenGL 3.3**. The interface is available in English and German:
+Mule needs a graphics card with **OpenGL 3.3**, or a Mac supporting **Metal 4** on macOS 27 or later. The interface is available in English and German:
 View → Sprache / Language, then restart.
 
 Mule has no installer and writes nothing into its program folder. Your data go to `%APPDATA%\Mule` (recipes,

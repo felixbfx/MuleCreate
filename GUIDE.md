@@ -18,10 +18,14 @@ No Python and no installation needed.
 “Windows protected your PC”. Click **“More info”**, then **“Run anyway”**. (On a German Windows:
 „Weitere Informationen“ → „Trotzdem ausführen“.) If your company does not allow this, cancel and ask your IT.
 
-**Linux / from source:** unzip `Mule_Source.zip`, then
-- Linux: `./start.sh` (on first start it sets up its own Python 3.14 inside the folder with
-  [uv](https://docs.astral.sh/uv/); this needs internet once),
-- Windows: `start.bat` (the first start sets everything up itself, needs Python 3.14 and internet once), or by hand `py -3.14 -m venv .venv`, `.venv\Scripts\pip install -r requirements.txt`,
+**From source:** unzip `Mule_Source.zip`. The launchers are in the extracted repository root:
+
+- macOS: install Homebrew, uv and Xcode with its Metal toolchain as described in
+  [the README](README.md#install-and-start), then run `./start.sh`. It uses uv to prepare dependencies, builds
+  `dist/Mule.app`, and launches that app. You can also double-click the built app in Finder.
+- Linux: install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run `./start.sh`. uv provides
+  Python 3.14 and the pinned packages, then launches Mule from source. First use needs internet for downloads.
+- Windows: double-click `start.bat` (the first start sets everything up itself, needs Python 3.14 and internet once), or by hand `py -3.14 -m venv .venv`, `.venv\Scripts\pip install -r requirements.txt`,
   `.venv\Scripts\python -m sketch_machine`.
 
 Linux has hardly been tested so far.

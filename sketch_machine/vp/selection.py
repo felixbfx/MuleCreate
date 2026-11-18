@@ -527,14 +527,14 @@ class SelectionMixin:
         x0, y0, _ = self._physical(rect.bottomLeft())
         x1, y1, size = self._physical(rect.topRight())
         groups = [[m] for m in meshes] if self.xray else [self._pick_items(self._pickables())]
-        found = []
-        self.makeCurrent()
-        for group in groups:
-            self.renderer.update_pick(size, self.cam, self._projection(), group)
-            data, _, _ = self.renderer.read_pick(x0, y0, x1 - x0 + 1, y1 - y0 + 1)
-            found += [self.renderer.pick_mesh(int(i)) for i in np.unique(np.round(data[..., 3])) if i > 0]
-        self._unbind_vao()
-        self.doneCurrent()
+        def gpu():
+            found = []
+            for group in groups:
+                self.renderer.update_pick(size, self.cam, self._projection(), group)
+                data, _, _ = self.renderer.read_pick(x0, y0, x1 - x0 + 1, y1 - y0 + 1)
+                found += [self.renderer.pick_mesh(int(i)) for i in np.unique(np.round(data[..., 3])) if i > 0]
+            return found
+        found = self._with_gpu(gpu)
         return [m for m in found if isinstance(m, MeshObject)]
 
     def _band_select(self, rect, how):

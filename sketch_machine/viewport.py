@@ -1,4 +1,5 @@
-"""3D viewport: OpenGL for meshes and planes, QPainter overlay for strokes and gizmos.
+"""3D viewport: GPU rendering (native Metal or OpenGL - vp/backend.py), QPainter overlay
+for gizmos and markers.
 
 Navigation like Houdini, axis gizmo like Blender. Drawing happens on the active
 drawing surface: a plane (analytic ray intersection) or a mesh (GPU picking).
@@ -52,14 +53,11 @@ NAV_MODES = ("orbit", "pan", "dolly")  # mouse camera modes: change only the vie
 class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, ToolsMixin, PointToolsMixin, SnapMixin,
                CleanupMixin,
                SurfaceOpsMixin, NavigationMixin, VisibilityMixin, DrawingMixin, EditOpsMixin, EraserMixin,
-               OverlayMixin, DisplayListMixin, NullMixin, TimingViewMixin, QOpenGLWidget):
+               OverlayMixin, DisplayListMixin, NullMixin, TimingViewMixin, GPUBackend):
     def __init__(self, workspace=None):
         super().__init__()
-        fmt = QSurfaceFormat()
-        fmt.setVersion(3, 3)
-        fmt.setProfile(QSurfaceFormat.CompatibilityProfile)  # allows line widths > 1
-        fmt.setDepthBufferSize(24)
-        self.setFormat(fmt)  # the renderer does MSAA itself, Qt does not pass it through here
+        self.renderer = None
+        self._setup_surface()  # Native MetalKit view or QOpenGLWidget; see vp/backend.py
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
 
@@ -175,26 +173,26 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
         for vp in self.ws.viewports:
             vp._lists_dirty = True
             vp._lofts_fresh = None  # reconcile surfaces on the next frame (unless _changed just did it)
-            QOpenGLWidget.update(vp)
+            vp.request_frame()
 
     def update_live(self):
         """Redraw, only the stroke currently being created has changed: lines and surfaces of the scene stay
         as in the last frame (no surface reconciliation, no re-upload of all strokes) - only the live part is
         rebuilt (_live_draw_list). If the scene does change in the process, it calls update() as usual."""
         for vp in self.ws.viewports:
-            QOpenGLWidget.update(vp)
+            vp.request_frame()
 
     def update_hover(self):
         """Redraw, only the highlight under the mouse has changed (_draw_lists builds the stroke list alone)."""
         self._hover_dirty = True
-        QOpenGLWidget.update(self)
+        self.request_frame()
 
     def update_view(self, all_views=False):
         """Redraw, only the camera of this viewport has moved: strokes and surfaces stay as they are
         (draw lists from the last frame) - as in Blender/Houdini, rotating then costs almost only the GPU.
         all_views: also the other viewports (an overlay like a note has changed)."""
         for vp in (self.ws.viewports if all_views else [self]):
-            QOpenGLWidget.update(vp)
+            vp.request_frame()
 
     def grabFramebuffer(self):
         self._lists_dirty = True  # image for saving/checking: always from the current state
@@ -355,12 +353,6 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
         return point if hit_mesh is mesh else None
 
     # --- Display ------------------------------------------------------
-    def initializeGL(self):
-        try:
-            self.renderer = Renderer(moderngl.create_context(), self.context().functions())
-        except Exception as exc:  # e.g. driver without OpenGL 3.3
-            self.renderer, self._gl_error = None, str(exc)
-
     MARKS_EVERY = 4  # in a gizmo drag: read the occlusion of the points back from the graphics card only every this-many frames
 
     def _marks_visible(self, shared, free):
@@ -380,70 +372,68 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
         self._marks_vis = (vis, 0)
         return vis
 
-    def paintGL(self):
+    def _paint_scene(self, fbo):
+        """GPU part of a frame (renderer into fbo) - between begin/endNativePainting with OpenGL, inside
+        a native frame with Metal. Afterwards _paint_overlay draws the QPainter part on top."""
         scene = self.scene
         self._track_pick_order()
-        p = QPainter(self)
-        if self.renderer is not None:
-            # native GL between begin/endNativePainting, otherwise moderngl's GL state disturbs the QPainter
-            p.beginNativePainting()
-            fbo = self.renderer.ctx.detect_framebuffer(self.defaultFramebufferObject())
-            opacity = self.surface_opacity
-            # orthographic: light from far behind along the view direction (parallel like the view)
-            light = self.cam.eye + self.cam.back * (1e4 if self.cam.ortho else 0.0)
-            sun = self.scene.sun
-            self.renderer.light = (dict(dir=light_mod.direction(sun), col=light_mod.color(sun), sky=light_mod.SKY_TINT,
-                                        away=light_mod.AWAY_DARK, shadow=light_mod.SHADOW_DARK, dome=light_mod.DOME,
-                                        bands=self.scene.light_bands)
-                                   if self.ws.light_on else None)
-            self.renderer.material_scale = self.ws.material_scale
-            # (not for images without controls - brief, MCP: they set light and sun themselves)
-            self.renderer.shadow_hold = (self._mode == "transform" and self.gizmo.dragging
-                                         and not getattr(self, "_clean_frame", False))
-            strokes, live, surfaces, meshes = self._draw_lists()  # meshes: the same list when rotating (view-frustum test)
-            self.renderer.pictures = [] if getattr(self, "_clean_frame", False) else \
-                pictures.draw_list(self.scene, self.planes_visible)
-            self.renderer.render(fbo, self.cam, self._projection(), self._focal(), light, meshes,
-                                 self._plane_draw_list(), strokes, opacity, live=live,
-                                 min_px=self.devicePixelRatioF(), surfaces=surfaces,
-                                 view_tan=self._tan_half(),
-                                 infinite=self._infinite_plane(), xray=self.xray_opacity if self.xray else None,
-                                 wire=self.ws.wire_opacity if self.ws.wireframe else None,
-                                 flip=self._flip_frame())
-            self._frame_painted = True  # playback: the next frame only after this image (do not lose frames)
-            self._frame_marks = None
-            if getattr(self, "_want_ids", False):  # clean_image(ids=True): color ID of this image
-                self._id_map = self.renderer.id_map()
-                fbo.use()
-                self.renderer.ctx.viewport = (0, 0, *fbo.size)
-            if self.select_mode and self.ws.component in ("point", "edge"):
-                # points in edit: do not show those occluded by surfaces (X-ray: all) - the GPU checks them in the
-                # coverage map of this image, then draw them into the image again
-                shared, free, _ = self._net_marks()
-                vis = self._marks_visible(shared, free)
-                n = len(shared)
-                self._frame_marks = ([q for q, v in zip(shared, vis[:n]) if v], [q for q, v in zip(free, vis[n:]) if v])
-                fbo.use()
-                self.renderer.ctx.viewport = (0, 0, *fbo.size)
-            # notes and their connection lines: parts occluded by geometry as with any line (X-ray: all)
-            self.notes_tool.occlusion = None
-            if self.ws.notes_visible and self.note_list() and not self.xray:
-                self.notes_tool.occlusion = self.notes_tool.visibility(self.renderer.points_visible)
-                fbo.use()
-                self.renderer.ctx.viewport = (0, 0, *fbo.size)
-            self.renderer.release_unused([m.geo for m in scene.meshes] +
-                                         [px.geo for s in scene.surfaces
-                                          if (px := s.pick_proxy(build=False)) is not None])
-            self._unbind_vao()
-            p.endNativePainting()
+        opacity = self.surface_opacity
+        # orthographic: light from far behind along the view direction (parallel like the view)
+        light = self.cam.eye + self.cam.back * (1e4 if self.cam.ortho else 0.0)
+        sun = self.scene.sun
+        self.renderer.light = (dict(dir=light_mod.direction(sun), col=light_mod.color(sun), sky=light_mod.SKY_TINT,
+                                    away=light_mod.AWAY_DARK, shadow=light_mod.SHADOW_DARK, dome=light_mod.DOME,
+                                    bands=self.scene.light_bands)
+                               if self.ws.light_on else None)
+        self.renderer.material_scale = self.ws.material_scale
+        # (not for images without controls - brief, MCP: they set light and sun themselves)
+        self.renderer.shadow_hold = (self._mode == "transform" and self.gizmo.dragging
+                                     and not getattr(self, "_clean_frame", False))
+        strokes, live, surfaces, meshes = self._draw_lists()  # meshes: the same list when rotating (view-frustum test)
+        self.renderer.pictures = [] if getattr(self, "_clean_frame", False) else \
+            pictures.draw_list(self.scene, self.planes_visible)
+        self.renderer.render(fbo, self.cam, self._projection(), self._focal(), light, meshes,
+                             self._plane_draw_list(), strokes, opacity, live=live,
+                             min_px=self.devicePixelRatioF(), surfaces=surfaces,
+                             view_tan=self._tan_half(),
+                             infinite=self._infinite_plane(), xray=self.xray_opacity if self.xray else None,
+                             wire=self.ws.wire_opacity if self.ws.wireframe else None,
+                             flip=self._flip_frame())
+        self._frame_painted = True  # playback: the next frame only after this image (do not lose frames)
+        self._frame_marks = None
+        if getattr(self, "_want_ids", False):  # clean_image(ids=True): color ID of this image
+            self._id_map = self.renderer.id_map()
+            fbo.use()
+            self.renderer.ctx.viewport = (0, 0, *fbo.size)
+        if self.select_mode and self.ws.component in ("point", "edge"):
+            # points in edit: do not show those occluded by surfaces (X-ray: all) - the GPU checks them in the
+            # coverage map of this image, then draw them into the image again
+            shared, free, _ = self._net_marks()
+            vis = self._marks_visible(shared, free)
+            n = len(shared)
+            self._frame_marks = ([q for q, v in zip(shared, vis[:n]) if v], [q for q, v in zip(free, vis[n:]) if v])
+            fbo.use()
+            self.renderer.ctx.viewport = (0, 0, *fbo.size)
+        # notes and their connection lines: parts occluded by geometry as with any line (X-ray: all)
+        self.notes_tool.occlusion = None
+        if self.ws.notes_visible and self.note_list() and not self.xray:
+            self.notes_tool.occlusion = self.notes_tool.visibility(self.renderer.points_visible)
+            fbo.use()
+            self.renderer.ctx.viewport = (0, 0, *fbo.size)
+        self.renderer.release_unused([m.geo for m in scene.meshes] +
+                                     [px.geo for s in scene.surfaces
+                                      if (px := s.pick_proxy(build=False)) is not None])
+
+    def _paint_overlay(self, p):
+        """QPainter part of a frame: axes, notes, gizmos, markers, bars (logical pixels, on top of the GPU image)."""
         p.setRenderHint(QPainter.Antialiasing)
         if self.renderer is None:
             p.fillRect(self.rect(), theme.ERROR_BG)
             p.setPen(theme.ERROR_FG)
-            p.drawText(self.rect(), Qt.AlignCenter, tr("OpenGL 3.3 nicht verfügbar:\n{0}").format(self._gl_error))
+            msg = tr("Metal 4 nicht verfügbar:\n{0}") if USE_METAL else tr("OpenGL 3.3 nicht verfügbar:\n{0}")
+            p.drawText(self.rect(), Qt.AlignCenter, msg.format(self._gl_error))
         self._draw_world_axes(p)
         if getattr(self, "_clean_frame", False):  # clean image (clean_image): no controls
-            p.end()
             return
         self._draw_nulls(p)
         self._draw_active_outline(p)
@@ -472,7 +462,6 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
         self._draw_tool_bar(p)
         self._draw_value_hud(p)
         self._draw_view_label(p)
-        p.end()
 
     # --- Context menu ------------------------------------------------------
     def _context_menu(self, pos, global_pos):

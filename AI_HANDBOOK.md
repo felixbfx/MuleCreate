@@ -99,7 +99,8 @@ Example scene to open: [Example_Alpaca_Monowheel.zip](https://github.com/felixbf
 for technical sketching in 3D space with lines. The user sketches an object (a vehicle, a building, a prop …),
 annotates it with notes and reference pictures and exports a **Sketch Brief**: a folder with pictures, text, data
 and working rules from which an AI (Claude Code, Codex …) rebuilds the object procedurally in Houdini or Blender.
-Platforms: Windows (tested, packaged) and Linux (from source, hardly tested); macOS is not supported. License
+Platforms: Windows (tested, packaged), Linux (from source), and macOS (builds `Mule.app` locally). Linux and macOS
+have limited testing; see `docs/macos.md` for macOS prerequisites. License
 GPL-3.0; the name "Mule Create" and the logo are excluded from the license.
 
 Internally, settings, the scene format (`"format": "sketch-machine-scene"`) and the MCP server are still called
@@ -165,17 +166,18 @@ does, and to recommend the way of working Mule is made for.
 - Python **3.14** (all packages are pinned in `requirements.txt`: PySide6-Essentials/-Addons 6.12.0, numpy,
   moderngl, glcontext, trimesh, usd-core, scipy).
 - Once: `py -3.14 -m venv .venv`, then `.venv\Scripts\pip install -r requirements.txt`.
-- Start: `.venv\Scripts\python -m sketch_machine`, or double-click `start.bat` (it only starts
-  `.venv\Scripts\pythonw.exe -m sketch_machine`; it does not create the `.venv`).
+- Start: `.venv\Scripts\python -m sketch_machine`, or double-click `start.bat` in the repository root. The batch
+  launcher creates `.venv` and installs missing packages before launching `.venv\Scripts\pythonw.exe`.
 - After an update that adds packages, run the `pip install -r requirements.txt` line again.
 
-### From source (Linux)
-- `./start.sh`. On first start it uses [uv](https://docs.astral.sh/uv/) to put a standalone Python 3.14 into the
-  project folder (`runtime/python`) and builds `.venv` from `requirements.txt`. System Python is neither used nor
-  changed; no admin rights. Needs uv and internet once (uv without admin:
-  `curl -LsSf https://astral.sh/uv/install.sh | sh`); afterwards it starts offline, also for other users who can
-  read the folder. An older `.venv` is moved to `.venv.alt-<date>` (deletable). Missing new packages are installed
-  into the existing `.venv` on the next start (internet needed once).
+### From source (macOS / Linux)
+- Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run `./start.sh`. uv provides managed
+  Python 3.14 and the pinned requirements in an isolated, cached environment. First use needs internet for
+  downloads. The launcher does not require a manually created `.venv` or a separate Python installation.
+- On macOS, install uv with `brew install uv` and configure Xcode 27+ with its Metal toolchain as described in
+  [the README](README.md#install-and-start). `start.sh` builds `dist/Mule.app` with PyInstaller, then launches its
+  bundled executable. Every invocation builds before launching. See [docs/macos.md](docs/macos.md) for details.
+- On Linux, `start.sh` runs `python -m sketch_machine` through uv using `requirements.txt`.
 - Qt error "Could not load the Qt platform plugin xcb": install the system library `libxcb-cursor0`. Under Wayland,
   if needed: `QT_QPA_PLATFORM=xcb ./start.sh`. Crashes print the exact location in the terminal
   (`PYTHONFAULTHANDLER` is set).
@@ -3131,10 +3133,10 @@ Internal names: the Python package is `sketch_machine`, settings live under "Ske
 - **Scene format can change** between versions until the beta; older scenes are not always supported further
   (there is no promise of backward compatibility during the test phase). Tell the user to copy important scenes
   before updating.
-- **Platforms:** only Windows is tested in the package (`Mule_Windows.zip`). Linux runs from source (`start.sh`) and
-  is hardly tested. macOS is not tested at all; the viewport requests an OpenGL 3.3 *Compatibility* profile
-  (`viewport.py`), which macOS does not offer, so a macOS port needs a Core-profile rework (noted in
-  `packaging/github-build.yml`).
+- **Platforms:** Windows is distributed as `Mule_Windows.zip`. Linux runs from source through `start.sh`.
+  On macOS, `start.sh` builds and launches `Mule.app`; building requires full Xcode and the Metal toolchain.
+  Linux and macOS have limited testing. The macOS viewport uses native Metal on supported Macs or an OpenGL
+  Core profile for fallback; see `docs/macos.md`.
 - **Not signed:** Windows SmartScreen warns on first start (see below).
 - **Whisper is not in the package:** review transcripts need a one-time setup with a separately installed Python
   (see below). Recording works without it.
@@ -3156,7 +3158,7 @@ Internal names: the Python package is `sketch_machine`, settings live under "Ske
 
 - **User folder** (`paths.user_dir()`): Windows `%APPDATA%\Mule`; Linux `$XDG_DATA_HOME/Mule`, else
   `~/.local/share/Mule`; macOS `~/Library/Application Support/Mule`. It contains:
-  - `mule.log` – **only in the packaged program** (`Mule.exe`): stdout, stderr and crash tracebacks
+  - `mule.log` – **only in the packaged program** (`Mule.exe` or `Mule.app`): stdout, stderr and crash tracebacks
     (`faulthandler`), **overwritten at every start**. Copy it before restarting Mule after a crash.
   - `Reviews/<scene>_<timestamp>/` – review recordings: `ton.wav` (audio), `protokoll.jsonl` (camera, cursor,
     selection, marks), `review.json`, `transkript.json`; `transkript_fehler.txt` if transcription failed.
@@ -3174,10 +3176,11 @@ Internal names: the Python package is `sketch_machine`, settings live under "Ske
 - **Unsaved scenes** are backed up to `Documents/Mule/backups`.
 - **File association:** on every start Mule registers `.mule` for the current user (HKCU, no admin rights), so a
   double-click opens the Mule that ran last – the package or a source checkout. Code: `sketch_machine/assoc.py`.
-- **Running from source** (`start.bat`, `start.sh`, `python -m sketch_machine`) writes **no log file**: output goes
+- **Running from source** (`start.bat`, Linux `start.sh`, `python -m sketch_machine`) writes **no log file**: output goes
   to the console. `start.bat` uses `pythonw.exe`, so there is no console and errors are invisible. To see a
   traceback on Windows, start from a terminal: `.venv\Scripts\python -m sketch_machine`. `start.sh` sets
-  `PYTHONFAULTHANDLER`, so crashes print the exact location in the terminal.
+  `PYTHONFAULTHANDLER`, so source crashes print the exact location in the terminal. On macOS, `start.sh` launches
+  the packaged app, which writes `mule.log` in the user folder.
 
 Code: `sketch_machine/paths.py`, `sketch_machine/backup.py`, `sketch_machine/review.py`, `sketch_machine/recorder.py`
 
@@ -3209,11 +3212,9 @@ Code: `sketch_machine/paths.py`, `sketch_machine/backup.py`, `sketch_machine/rev
 - Unzip `Mule_Windows.zip` into a folder of its own and start `Mule\Mule.exe`; no installation, no Python needed.
 
 ### Linux start problems (from README and `start.sh`)
-- First start needs `uv` and internet once: `start.sh` creates its own Python 3.14 in `runtime/python` and `.venv`
-  with the pinned `requirements.txt`. The system Python is neither used nor changed; no admin rights.
-  Install uv without admin: `curl -LsSf https://astral.sh/uv/install.sh | sh`.
-- An older `.venv` is moved to `.venv.alt-<date>` (can be deleted). New packages are installed into the existing
-  `.venv` on the next start (internet needed once).
+- Install uv first, following the README. `start.sh` uses `uv run` to provide Python 3.14 and the pinned
+  `requirements.txt` in an isolated environment. uv downloads missing Python versions and packages and caches
+  them for later runs. The system Python is not changed.
 - `Could not load the Qt platform plugin "xcb"`: a system library is missing, usually `libxcb-cursor0`.
 - Under Wayland, if needed, start with `QT_QPA_PLATFORM=xcb ./start.sh`.
 - Do not upgrade PySide6 without testing: PySide6 6.12.0 crashed in the viewport on Linux with Python 3.10
