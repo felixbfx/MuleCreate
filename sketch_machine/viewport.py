@@ -23,6 +23,7 @@ tasks live as mixins in sketch_machine/vp/ (shared imports, constants and helper
   eraser          eraser
   overlay         QPainter overlay: gizmos, light buttons, markers
   display_lists   lists for the renderer: strokes, surfaces, planes, meshes
+  pie             hold-to-invoke radial menus (transform tools, selection kinds)
 """
 from .vp.common import *  # noqa: F401,F403
 from .vp.selection import SelectionMixin
@@ -43,6 +44,7 @@ from .vp.overlay import OverlayMixin
 from .vp.display_lists import DisplayListMixin
 from .vp.nulls import NullMixin
 from .vp.timing_view import TimingViewMixin
+from .vp.pie import PieMixin
 from . import i18n, pictures
 from .i18n import tr
 
@@ -52,7 +54,7 @@ NAV_MODES = ("orbit", "pan", "dolly")  # mouse camera modes: change only the vie
 class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, ToolsMixin, PointToolsMixin, SnapMixin,
                CleanupMixin,
                SurfaceOpsMixin, NavigationMixin, VisibilityMixin, DrawingMixin, EditOpsMixin, EraserMixin,
-               OverlayMixin, DisplayListMixin, NullMixin, TimingViewMixin, QOpenGLWidget):
+               OverlayMixin, DisplayListMixin, NullMixin, TimingViewMixin, PieMixin, QOpenGLWidget):
     def __init__(self, workspace=None):
         super().__init__()
         fmt = QSurfaceFormat()
@@ -143,8 +145,11 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
         self._flight_ortho = None  # at the end of the flight orthographic (True) / perspective (False)
         self._persp_view = None  # free view before the jump into an axis view
         self._orbit_pivot = None  # point under the cursor at the start of the orbit
+        self._orbit_alt_snap = False  # Blender-style Alt axis snap while orbiting
+        self._orbit_snap_axis = None
         self._flight_timer = QTimer(self, interval=15)
         self._flight_timer.timeout.connect(self._step_flight)
+        self._init_pie()
 
     def tabletEvent(self, e):
         """Graphics tablet (Wacom): only remember the pressure; do not accept the event - Qt turns it into the
@@ -472,6 +477,7 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
         self._draw_tool_bar(p)
         self._draw_value_hud(p)
         self._draw_view_label(p)
+        self._draw_pie(p)
         p.end()
 
     # --- Context menu ------------------------------------------------------
@@ -552,6 +558,10 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
         navigating = bool(mods & Qt.AltModifier) or self._space
         target = self.gizmo_target
 
+        if self._mode == "pie":
+            # Click confirms the hovered slice (same as releasing the pie key).
+            self.confirm_pie(pos)
+            return
         if self._mode == "bevel":  # rounding: left click confirms, right click cancels
             self._finish_bevel(b == Qt.LeftButton)
             self.update()
@@ -605,9 +615,25 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
             self._erase_filter = self._erase_filter_for(mods)
             self._erase(pos, pos)
         elif navigating:
+            # Alt/Space: Maya / Industry Compatible — LMB orbit, MMB pan, RMB dolly.
+            # With Alt held, orbit uses Blender-style axis snap (see mouseMove).
             self._mode = {Qt.LeftButton: "orbit", Qt.MiddleButton: "pan", Qt.RightButton: "dolly"}.get(b)
+            self._orbit_alt_snap = bool(mods & Qt.AltModifier) and self._mode == "orbit"
+            self._orbit_snap_axis = None
             self._orbit_pivot = self._pick_point(pos) if self._mode == "orbit" else None
             return self.update_view()  # only the camera moves right away: no rebuild at the start
+        elif b == Qt.MiddleButton:
+            # Blender default (no modifier): MMB orbit, Shift+MMB pan, Ctrl+MMB dolly.
+            if mods & Qt.ShiftModifier:
+                self._mode = "pan"
+            elif mods & Qt.ControlModifier:
+                self._mode = "dolly"
+            else:
+                self._mode = "orbit"
+                self._orbit_alt_snap = bool(mods & Qt.AltModifier)
+                self._orbit_snap_axis = None
+                self._orbit_pivot = self._pick_point(pos)
+            return self.update_view()
         elif b == Qt.RightButton and mods & Qt.ControlModifier and self._width_targets(mods):
             # Ctrl + RMB drag in edge mode: thickness of the selected lines; Ctrl + Shift in drawing: of all lines
             self._mode = "linewidth"
@@ -685,6 +711,9 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
                 self._pressure_trace.append(pressure)
         if self._mode == "sun":  # sky disc: drag the sun
             self._sun_from_disc(pos)
+            return
+        if self._mode == "pie":
+            self.pie_move(pos)
             return
         if self.notes_mode and self._mode in (None, "note") or self.ws.timing_mode and self._mode == "note":
             if self._mode is None:
@@ -765,9 +794,15 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
             self._erase_filter = self._erase_filter_for(e.modifiers())  # can also be switched mid-drag
             self._erase(pos - d, pos)
         elif self._mode == "orbit" or (self._mode == "gizmo" and moved):
-            self.cam.orbit(d.x(), d.y(), self._orbit_pivot if self._mode == "orbit" else None)
-            self.cam.ortho = False  # rotating leaves the axis view
-            self._persp_view = None  # freely rotated: this is now the perspective view
+            alt = bool(e.modifiers() & Qt.AltModifier) or self._orbit_alt_snap
+            if self._mode == "orbit" and alt:
+                # Blender: hold Alt while rotating the view → snap through orthographic axes.
+                self.orbit_axis_snap(d.x(), d.y())
+            else:
+                self.cam.orbit(d.x(), d.y(), self._orbit_pivot if self._mode == "orbit" else None)
+                self.cam.ortho = False  # rotating leaves the axis view
+                self._persp_view = None  # freely rotated: this is now the perspective view
+                self._orbit_snap_axis = None
         elif self._mode == "pan":
             self.cam.pan(d.x(), d.y(), 2 * math.atan(self._tan_half()), self.height())
         elif self._mode == "dolly":
@@ -824,6 +859,10 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
 
     def mouseReleaseEvent(self, e):
         pos = e.position()
+        if self._mode == "pie":
+            # Mouse click already confirmed on press; ignore the matching release.
+            self._press_pos = None
+            return
         if self._mode == "note":
             self.notes_tool.release(e)
             self._mode = None
@@ -831,6 +870,8 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
             self._changed()
             return
         if self._mode in NAV_MODES:  # camera released: nothing has changed in the scene
+            self._orbit_alt_snap = False
+            self._orbit_snap_axis = None
             self._mode = None
             self._hold_timer.stop()
             return self.update_view()
@@ -1095,6 +1136,8 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
             self.update()
             return
         if self._space:
+            # Space+1..4 like Houdini; Shift+2/3/4 = opposite axis (Blender Ctrl+numpad).
+            shift = bool(mods & Qt.ShiftModifier)
             actions = {
                 Qt.Key_G: lambda: self.focus(self.selected or self.scene.active_surface),
                 Qt.Key_H: self.home,
@@ -1103,9 +1146,12 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
                 Qt.Key_M: self._toggle_space,
                 Qt.Key_F: lambda: self.area and self.area.toggle_maximize(self),  # viewport large (previously Space+B)
                 Qt.Key_1: self.perspective_view,
-                Qt.Key_2: lambda: self.axis_view(np.array([0, 1.0, 0])),  # Top
-                Qt.Key_3: lambda: self.axis_view(np.array([0, 0, 1.0])),  # Front
-                Qt.Key_4: lambda: self.axis_view(np.array([1.0, 0, 0])),  # Right
+                Qt.Key_2: lambda: self.axis_view(np.array([0, -1.0 if shift else 1.0, 0])),  # Top / Bottom
+                Qt.Key_3: lambda: self.axis_view(np.array([0, 0, -1.0 if shift else 1.0])),  # Front / Back
+                Qt.Key_4: lambda: self.axis_view(np.array([-1.0 if shift else 1.0, 0, 0])),  # Right / Left
+                Qt.Key_5: lambda: self.axis_view(np.array([0, -1.0, 0])),  # Bottom
+                Qt.Key_6: lambda: self.axis_view(np.array([0, 0, -1.0])),  # Back
+                Qt.Key_7: lambda: self.axis_view(np.array([-1.0, 0, 0])),  # Left
             }
             if k in actions:
                 actions[k]()
@@ -1135,8 +1181,14 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
             op.apply(self._bevel["size"])
             self._changed()
             return
-        if k in (Qt.Key_Tab, Qt.Key_Backtab) and self._mode is None:
-            return self.toggle_edit()
+        if k in (Qt.Key_Tab, Qt.Key_Backtab) and self._mode is None and not e.isAutoRepeat():
+            # Hold Tab → selection pie (point/edge/face); release in center → draw↔edit toggle.
+            return self.open_pie("select", k, tap=self.toggle_edit)
+        if k == Qt.Key_W and not mods and self._mode is None and not e.isAutoRepeat() and not self.notes_mode:
+            # Hold W → transform pie (Move/Rotate/Scale + spaces); machine-free style.
+            if not self.select_mode:
+                self.set_select_mode(True)
+            return self.open_pie("transform", k)
         if k == Qt.Key_S and not mods and self._mode is None and not self.select_mode and not self.notes_mode:
             if not e.isAutoRepeat():
                 self.set_paint_mode(not self.ws.paint_mode)  # S in drawing: paint mode on/off
@@ -1211,6 +1263,8 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
                 if self.select_mode and self.ws.component == "point":
                     self.status_changed.emit(tr("S gehalten: gewählte Punkte ziehen – sie gleiten auf ihrer Linie"))
             return
+        elif k == Qt.Key_Escape and self._mode == "pie":
+            return self.cancel_pie()
         elif k == Qt.Key_Escape and self.select_mode and self.ws.value_tool:
             return self.set_value_tool(None)
         elif k == Qt.Key_Escape and self.select_mode:
@@ -1407,6 +1461,10 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
         self._changed()
 
     def keyReleaseEvent(self, e):
+        if self._pie is not None and not e.isAutoRepeat() and e.key() == self._pie.get("key"):
+            self.confirm_pie(self._last_pos)
+            e.accept()
+            return
         if e.key() == Qt.Key_Space and not e.isAutoRepeat():
             self._space = False
         elif e.key() == Qt.Key_Control:
@@ -1425,6 +1483,8 @@ class Viewport(SelectionMixin, PickingMixin, ComponentEditMixin, FreeDrawMixin, 
 
     def focusOutEvent(self, e):
         # held keys end here (e.g. mouse moved into another viewport)
+        if self._pie is not None:
+            self.cancel_pie()
         self._space = False
         self._ctrl = False
         self._penetrate = False
