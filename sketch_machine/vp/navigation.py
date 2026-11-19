@@ -3,6 +3,29 @@ from .common import *  # noqa: F401,F403
 from ..i18n import tr
 
 
+
+
+# World-axis look directions (camera looks along -back). Matches Blender View Axis / MACHIN3 View Axis.
+AXIS_VIEWS = (
+    ("top",    (0.0, 1.0, 0.0)),
+    ("bottom", (0.0, -1.0, 0.0)),
+    ("front",  (0.0, 0.0, 1.0)),
+    ("back",   (0.0, 0.0, -1.0)),
+    ("right",  (1.0, 0.0, 0.0)),
+    ("left",   (-1.0, 0.0, 0.0)),
+)
+
+
+def nearest_axis_back(back):
+    """Nearest world axis for Blender-style Alt orbit snap."""
+    back = np.asarray(back, float).reshape(3)
+    n = float(np.linalg.norm(back))
+    if n < 1e-12:
+        return np.array(AXIS_VIEWS[0][1], float)
+    back = back / n
+    return max((np.array(a, float) for _, a in AXIS_VIEWS), key=lambda a: float(a @ back))
+
+
 class NavigationMixin:
     # --- Camera moves ----------------------------------------------------
     def fly_to(self, target, dist, rot):
@@ -65,6 +88,46 @@ class NavigationMixin:
                 if self.multi_mode:
                     self.scene.multi_ids = [facing.id]
                 self.notify(tr("Zeichnet auf: {0}").format(facing.name))
+
+
+    def snap_axis_view(self, back, animate=False):
+        """Snap to a world-axis orthographic view. Instant by default (Alt-orbit snappy feel)."""
+        back = np.asarray(back, float)
+        if getattr(self, "_look", None) is not None:
+            return self.notify(tr("In einer Shot-Kamera gibt es keine Achsenansichten – Esc verlässt die Kamera"))
+        if self._persp_view is None and not self.cam.ortho:
+            self._persp_view = self.cam.state()
+        rot = view_for_back(back)
+        if animate:
+            self.fly_to(self.cam.target, self.cam.dist, rot)
+            self._flight_ortho = True
+        else:
+            self._stop_flight()
+            self.cam.set_state(self.cam.target, self.cam.dist, rot)
+            self.cam.ortho = True
+            self._flight_ortho = None
+        plane = self.scene.active_plane
+        single = not self.multi_mode or [s for s in self._multi_surfaces()] == [plane]
+        if self.scene.active_mesh is None and plane is not None and plane.preset and single:
+            facing = max(self.scene.presets, key=lambda pl: abs(float(pl.normal @ back)))
+            if facing is not plane:
+                self.scene.activate(facing)
+                if self.multi_mode:
+                    self.scene.multi_ids = [facing.id]
+                self.notify(tr("Zeichnet auf: {0}").format(facing.name))
+        self.update_view()
+
+    def orbit_axis_snap(self, dx, dy):
+        """Orbit then quantize to nearest world axis (Blender Alt-during-view-rotate)."""
+        if self._persp_view is None and not self.cam.ortho:
+            self._persp_view = self.cam.state()
+        self.cam.orbit(dx * 1.35, dy * 1.35, self._orbit_pivot)
+        axis = nearest_axis_back(self.cam.back)
+        self.cam.rot = view_for_back(axis)
+        self.cam.ortho = True
+        prev = getattr(self, "_orbit_snap_axis", None)
+        if prev is None or float(np.linalg.norm(prev - axis)) > 1e-6:
+            self._orbit_snap_axis = axis.copy()
 
     def perspective_view(self):
         """Space + 1 as in Houdini: back to the free view before the last axis view."""
