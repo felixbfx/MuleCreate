@@ -1,0 +1,1 @@
+Das ist ein Bild-Brief, kein Bau-Brief: In 3D wird nichts gebaut. Arbeite im Brief-Ordner {{brief_dir}}. Lies dort CLAUDE.md und project.md und mach für „{{project_name}}“, was dort steht: zuerst den Look-Absatz und die Zeilen je Kamera mit mir, dann die Prompts bauen, dann die Bilder Schritt für Schritt. Nach jedem Schritt wähle ich aus.

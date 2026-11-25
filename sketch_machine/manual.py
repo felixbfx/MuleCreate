@@ -58,6 +58,7 @@ spätere Weiterverarbeitung in Houdini.</p>""" + \
     _section("Datei", "", [
         ("Speichern · Öffnen · Neu", "[Strg]+[S] · [O] · [N]"),
         ("Geometrie importieren (USD: Hierarchie wie in Solaris) · Sketch Brief exportieren", "[Strg]+[I] · [Strg]+[E]"),
+        ("Referenzobjekt einfügen (Größenvergleich): Mensch 1,80 m, Auto, Einfamilienhaus", "Datei-Menü"),
         ("Brief-Auftrag beim Export: Auftrag in einem Satz, Hinweise, nur besprechen, Look-Vorstufe (den Rest klärt "
          "die KI aus den Notizen)", "[Strg]+[E]"),
         ("Screenshot als Hero-Kamera fürs Brief (Bild + USD-Kamera), Name darunter", "Haken oben rechts am Bild"),
@@ -146,6 +147,8 @@ EDIT = _section("Wählen", "", [
              ]) + \
     _section("Ordnen", "", [
         ("Kopieren · Einfügen · Duplizieren · wiederholen", "[Strg]+[C] · [V] · [D] · [Shift]+[D]"),
+        ("In eine andere Szene oder ein zweites Mule-Fenster kopieren: über dem Outliner einfügen (Brett-Elemente samt Bildern)",
+         "[Strg]+[C] · [V]"),
         ("Auswahl in neues Objekt – Flächen, deren Linien alle umziehen, ziehen mit um", "[Strg]+[G]"),
         ("Mehrere Linienobjekte zusammenlegen (ihre Flächen stehen danach unter dem einen)", "Objekte wählen, [Strg]+[G]"),
         ("Aufräumen: verschweißen, verbinden, Doppeltes", "Cleanup oben"),

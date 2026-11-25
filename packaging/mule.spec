@@ -13,6 +13,9 @@ ICON = os.path.join(SPECPATH, "mule.ico")  # from the last frame of the logo ani
 datas = [(os.path.join(ROOT, "bible", "sketch_machine_bible.md"), "bible"),
          (os.path.join(ROOT, "sketch_machine", "assets", "mule_start.webp"), os.path.join("sketch_machine", "assets")),
          (os.path.join(ROOT, "sketch_machine", "assets", "mule_icon.png"), os.path.join("sketch_machine", "assets")),
+         # reference objects (File > Insert reference object): person 1.80 m, car, house
+         *[(os.path.join(ROOT, "sketch_machine", "assets", "reference", f), os.path.join("sketch_machine", "assets", "reference"))
+           for f in ("person_1m80.usda", "car.usda", "house.usda")],
          # Review: runs as its own program in the Python with faster-whisper, so it must be bundled as a .py file
          (os.path.join(ROOT, "sketch_machine", "review_transcribe.py"), "sketch_machine")]
 # Working-method package of the Sketch Brief (rules, roles, hooks, visibility map) – the export copies it into the brief folder

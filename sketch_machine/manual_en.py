@@ -17,6 +17,7 @@ tracing paper you draw on. Lines become surfaces, and notes are prompts for late
     _section("File", "", [
         ("Save · open · new", "[Ctrl]+[S] · [O] · [N]"),
         ("Import geometry (USD: hierarchy as in Solaris) · export Sketch Brief", "[Ctrl]+[I] · [Ctrl]+[E]"),
+        ("Insert reference object (to compare sizes): person 1.80 m, car, detached house", "File menu"),
         ("Brief assignment on export: assignment in one sentence, notes, discuss only, look pre-stage (the AI clarifies "
          "the rest from the notes)", "[Ctrl]+[E]"),
         ("Screenshot as hero camera for the brief (picture + USD camera), name below it", "check box at the picture's top right"),
@@ -105,6 +106,8 @@ EDIT = _section("Select", "", [
              ]) + \
     _section("Organize", "", [
         ("Copy · paste · duplicate · repeat", "[Ctrl]+[C] · [V] · [D] · [Shift]+[D]"),
+        ("Copy into another scene or a second Mule window: paste over the Outliner (board elements with their images)",
+         "[Ctrl]+[C] · [V]"),
         ("Selection to new object – surfaces whose lines all move go along", "[Ctrl]+[G]"),
         ("Merge several line objects (their surfaces then sit under the one)", "select objects, [Ctrl]+[G]"),
         ("Clean up: weld, connect, duplicates", "Cleanup at the top"),

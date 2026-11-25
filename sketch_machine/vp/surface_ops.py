@@ -31,13 +31,31 @@ class SurfaceOpsMixin:
                 rank[cid] = self._pick_count
 
     def do_loft(self, wrap=False):
-        # a selected piece of a line stands for the whole line (the cross-section is the drawn stroke, not just
-        # the piece between two points) – the line is not split for this
+        # A selected piece of a line is the cross-section – exactly this piece, like F and Alt+F take it (artist
+        # 2026-11-24: two pieces of two rings selected to bridge them, the loft took both whole rings). The line is
+        # split at the points of the piece; whoever wants the whole line selects the whole line.
         self._track_pick_order()  # order of the selection (even if nothing was drawn since the last click)
-        whole = [("line", r[1], c.id) for r, c in self._valid_segs()]
-        self.edge_selection = list(dict.fromkeys(list(self.edge_selection) + whole))
-        self.seg_selection = []
-        return self._do_loft(wrap)
+        segs = self._valid_segs()
+        if not segs:
+            self.seg_selection = []
+            return self._do_loft(wrap)
+        rank = dict(getattr(self, "_pick_rank", None) or {})
+        keep = (list(self.edge_selection), list(self.seg_selection))
+        parents = {c.id for _r, c in segs}
+        count = len(self.scene.surfaces)
+        self._materialize_segments()  # (saves the undo step; the loft's own checkpoint merges into it)
+        picked = {r[2] for r in self.edge_selection}
+        for cid in parents:  # the pieces stand where their line stood in the order of the selection
+            for piece in self.scene.split_map.get(cid, ()):
+                if piece in picked and cid in rank:
+                    self._pick_rank[piece] = rank[cid]
+        self._do_loft(wrap)
+        if len(self.scene.surfaces) == count:  # no loft came of it: the lines stay as they were
+            self.scene.undo()
+            self.scene._redo.clear()
+            self.scene._burst = (None, 0.0)
+            self.edge_selection, self.seg_selection = keep
+            self._changed()
 
     def _do_loft(self, wrap=False):
         """Shift+F: curved drawing surface through the selected cross-sections – lines (connected

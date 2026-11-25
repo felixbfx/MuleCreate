@@ -22,7 +22,7 @@ import numpy as np
 
 
 from . import components, fill, geometry, light, loft, network, notes as notes_geo, timing, video
-from . import counters, lru
+from . import counters, lru, paths
 from .geometry import Geometry
 from .i18n import tr
 
@@ -2745,7 +2745,7 @@ class Scene(SurfaceSyncMixin):
             id_map[n["id"]] = null.id
         failed = set()  # file missing: one warning, not one per mesh prim
         for m in data.get("meshes", []):
-            path = os.path.normpath(os.path.join(base_dir, m["path"]))
+            path = paths.reference_path(os.path.normpath(os.path.join(base_dir, m["path"])))
             prim = m.get("prim")
             try:
                 if path in failed:

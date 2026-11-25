@@ -1,0 +1,1 @@
+Image 2 shows where this view sits in the whole scene: the orange dot is this camera, the orange wedge is the direction it looks. Use it only to understand what you are looking at and what surrounds it. Do not copy its framing and do not paint the orange.

@@ -1252,8 +1252,8 @@ three icons in the left toolbar ("Select points (1)", "Select edges (2)", "Selec
 ### Sub-edges and line operations
 Line operations on selected sub-edges – `X`, `F`, `Shift+F`, `Alt+F`, `Del`, copy, `Ctrl+G`, `Ctrl+B` – first split the
 line at the points of the selected pieces so the operation gets real lines (same undo step). `Esc` during an
-extrude undoes that split. `Shift+F` (loft) is the exception: a selected piece stands for the whole line, which is
-not split.
+extrude undoes that split. This holds for `Shift+F` (loft) too: a selected
+piece is the cross-section, not its whole line (since v0.99.286).
 
 ### Double-click: other object, loop, surface with its lines
 In point or edge mode:
@@ -1504,8 +1504,8 @@ Every curve surface (from `F`, `Alt+F` or an open loft) is the result of its lin
 ### Loft (Shift+F)
 Curved drawing surface through cross-sections (like "Skin" in Houdini). Edit, `Shift+F` or right-click → Loft
 through cross-sections.
-- Select at least two cross-sections: lines (connected pieces = one cross-section; a selected sub-edge stands for
-  its whole line) and/or drawing surfaces (their outline – only in surface mode). A cross-section must not branch.
+- Select at least two cross-sections: lines (connected pieces = one cross-section; a selected sub-edge is exactly
+  that piece – the line is split at its points; select the whole line to loft the whole line) and/or drawing surfaces (their outline – only in surface mode). A cross-section must not branch.
 - Order = selection order (click the lines one after another). Only items added in one move (rectangle,
   double-click) share a rank and are ordered by position.
 - Alignment is automatic; cross-sections are connected by smooth curves (two cross-sections: straight; three or
@@ -1691,7 +1691,16 @@ generator becomes a plain null with original and copies below. One undo step.
   welded.
 - Array: each copy becomes its own object (nothing welded); orient rotates with the copy (mirror: unchanged).
 
+### Reference objects (File → Insert reference object)
+- Person 1.80 m, car 4.5 m, two-storey detached house (10 × 8 m, ridge 9.5 m): rough USD shapes in real size, only
+  for comparing sizes. Inserted as an imported mesh at the origin, standing on the ground (Y up, meters). The files
+  ship with Mule (`sketch_machine/assets/reference/`); a scene finds them again after an update or on another computer.
+
 ### Copy, paste, duplicate, repeat duplicate
+- **Between scenes and Mule windows:** the clipboard survives opening another scene or a new one, and a copy also goes
+  to the system clipboard as a small scene, so a second running Mule window can paste it. Copy, switch scene or
+  window, paste over the Outliner: whole objects with their surfaces (a line object takes its surfaces along, a null
+  everything below it); mesh files are referenced by path. Note-board elements carry their image data the same way.
 - `Ctrl+C` / `Ctrl+V` / `Ctrl+D` (Edit menu). Mouse over the Outliner: whole objects. In the viewport: lines go into
   the active stroke object (Duplicate: into their own); duplicated together with surfaces (e.g. a whole wing): into a
   new object per source, next to it in the same group, so copy and original stay separate.
@@ -3703,6 +3712,7 @@ Short UI names of the program (menus, buttons, tools, labels) as the German inte
 - Auswahl in eigenes Objekt	Strg+G → Selection to own object	Ctrl+G
 - Auswahl in neues Objekt → Selection to new object
 - Auswahl zur Krake hinzufügen → Add selection to octopus
+- Auto 4,5 m → Car 4.5 m
 - Automatisch Backups anlegen → Create backups automatically
 - Backup-Ordner öffnen → Open backup folder
 - Baut auf: → Builds on:
@@ -3768,6 +3778,7 @@ Short UI names of the program (menus, buttons, tools, labels) as the German inte
 - Ein-/Ausblenden → Show/Hide
 - Einblenden → Show
 - eine Datei → a file
+- Einfamilienhaus, zwei Stockwerke → Detached house, two storeys
 - Einfügen → Paste
 - Einfügen	Strg+V → Paste	Ctrl+V
 - Einfügen: Zwischenablage ist leer. → Paste: clipboard is empty.
@@ -3893,6 +3904,7 @@ Short UI names of the program (menus, buttons, tools, labels) as the German inte
 - Maximale Strichbreite … → Maximum stroke width …
 - Maximieren → Maximize
 - Maßgeblich – verfeinern erlaubt → Authoritative – refining allowed
+- Mensch 1,80 m → Person 1.80 m
 - Mikrofon → Microphone
 - Mikrofon lässt sich nicht öffnen → the microphone cannot be opened
 - Mit der eigenen KI fragen → Ask your own AI
@@ -3951,6 +3963,7 @@ Short UI names of the program (menus, buttons, tools, labels) as the German inte
 - Recipe importieren (.zip) … → Import recipe (.zip) …
 - Recipe-Ordner wählen (mit recipe.toml) → Choose the recipe folder (with recipe.toml)
 - Recipe-Ordner öffnen → Open recipe folder
+- Referenzobjekt einfügen → Insert reference object
 - Review absenden → Send Review
 - Review beenden → Stop Review
 - Review starten → Start Review

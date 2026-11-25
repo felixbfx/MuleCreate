@@ -1,0 +1,2 @@
+Image 1 is the structure image: a rough 3D sketch of the scene, seen from the final camera. It is binding for everything spatial. Keep the camera, the horizon and every form exactly where it is, at exactly its size and outline. Do not add, remove, move, merge or resize any form. Keep the picture format of image 1 ({format}); do not crop. If the format has to differ, add at the left and right edge, never cut.
+Its flat colours only tell the parts apart{legend}. The white outlines are sketch lines. Take no colour, shading or line from it.

@@ -29,6 +29,7 @@ from . import paths
 BRIEF_INTERFACE = 1  # version of what Mule offers recipes (facts, tokens, folders) – docs/recipes.md
 DEFAULT_ID = "default"
 BUILTIN_DIR = os.path.join(paths.ROOT, "sketch_machine", "brief_package")
+SHIPPED_DIR = os.path.join(paths.ROOT, "sketch_machine", "brief_recipes")  # further recipes that come with Mule
 RECIPE_FILE = "recipe.toml"
 LOCK_FILE = ".mule_recipe.json"
 TEMPLATES = ("project", "brief_head", "start", "review_start", "review_intro", "package_update", "reading", "look",
@@ -57,6 +58,7 @@ class Recipe:
     def __init__(self, path, builtin=False):
         self.path = os.path.abspath(path)
         self.builtin = builtin
+        self.shipped = False  # comes with Mule, but is not the default (brief_recipes/)
         self.problems = []
         self.meta = {}
         self.files = {}
@@ -286,6 +288,16 @@ def default():
 def available():
     """Built-in recipe first, then the user's (by name); recipes whose id is taken by an earlier one are marked."""
     out = [default()]
+    try:  # recipes that come with Mule (not the default): chosen like the user's, an own recipe cannot take their id
+        shipped = sorted(os.listdir(SHIPPED_DIR))
+    except OSError:
+        shipped = []
+    for n in shipped:
+        p = os.path.join(SHIPPED_DIR, n)
+        if os.path.isfile(os.path.join(p, RECIPE_FILE)):
+            r = Recipe(p)
+            r.shipped = True
+            out.append(r)
     try:
         root = user_dir(create=False)
         names = sorted(os.listdir(root))

@@ -1,0 +1,7 @@
+I am an artist working on a 3D scene. In this chat I want you to generate target pictures for its look. Do not generate anything yet.
+
+How we work: with every request I attach a structure image, a rough 3D sketch from the final camera. It decides where everything is and how big it is. Your picture decides only how it looks: materials, how things are built, how dense the detail is, wear, light and atmosphere. A picture that moves, adds, removes or resizes a form is wrong, however good it looks.
+
+Every request is complete in itself. Use each prompt as I write it; do not shorten or rephrase it. One picture per request, unless I ask for another variant.
+
+Answer only with "ready".

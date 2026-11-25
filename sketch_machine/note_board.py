@@ -5,6 +5,7 @@ the second monitor). Ctrl+V pastes images and text, files can be dragged in. Eve
 in the note immediately (one undo step in the shared history, Ctrl+Z/Ctrl+Y also in the board); images live
 in the scene (scene.assets) and are saved with it in the same file (like PureRef).
 """
+import base64
 import copy
 import hashlib
 import json
@@ -2321,7 +2322,12 @@ class NoteBoard(QFrame):
                 self.vp.notify(tr("Kopieren: erst Bilder oder andere Elemente im Brett wählen"))
             return False
         mime = QMimeData()
-        mime.setData(BOARD_MIME, json.dumps({"cut": bool(cut), "items": [e for _, e in pairs]}).encode("utf-8"))
+        # the image data comes along (names are content hashes): pasting works in another scene or Mule window too
+        files = {e["file"] for _, e in pairs if e.get("kind") == "image" and e.get("file")}
+        assets = {f: base64.b64encode(data).decode("ascii") for f in sorted(files)
+                  if self.vp is not None and (data := self.vp.scene.asset_bytes(f)) is not None}
+        mime.setData(BOARD_MIME, json.dumps({"cut": bool(cut), "items": [e for _, e in pairs], "assets": assets})
+                     .encode("utf-8"))
         images = [i for i, _ in pairs if isinstance(i, ImageItem)]
         if len(pairs) == 1 and images and not images[0].missing:
             mime.setImageData(images[0].pixmap().toImage())
@@ -2347,6 +2353,12 @@ class NoteBoard(QFrame):
         moved = bool(clip.get("cut"))
         if self.vp is None or not entries:
             return
+        for name, text in (clip.get("assets") or {}).items():  # images from another scene / Mule window
+            if self.vp.scene.asset_bytes(name) is None:
+                try:
+                    self.vp.scene.assets[name] = base64.b64decode(text)
+                except (ValueError, TypeError):
+                    pass
         lost = [e for e in entries if e.get("kind") == "image" and self.vp.scene.asset_bytes(e.get("file")) is None]
         entries = [e for e in entries if not any(e is x for x in lost)]
         xs, ys = [], []
@@ -2378,7 +2390,8 @@ class NoteBoard(QFrame):
             self._update_retake()
         if moved:  # cut is now pasted: pasting again is a copy
             again = QMimeData()
-            again.setData(BOARD_MIME, json.dumps({"cut": False, "items": clip.get("items") or []}).encode("utf-8"))
+            again.setData(BOARD_MIME, json.dumps({"cut": False, "items": clip.get("items") or [],
+                                                  "assets": clip.get("assets") or {}}).encode("utf-8"))
             QApplication.clipboard().setMimeData(again)
         text = tr("{0} Element(e) eingefügt").format(len(entries))
         if lost:

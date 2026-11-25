@@ -691,9 +691,10 @@ def test_fill_surface_delete_corner_outline_over_line(h: H):
 
 
 def test_open_loft_becomes_a_curve_surface_with_whole_lines(h: H):
-    """loft_test (artist): a cross-section has points (pieces); only one piece is selected - still the whole
+    """loft_test (artist): a cross-section has points (pieces) and is selected as a whole line - the whole
     line belongs to the loft. An open loft then becomes a curve surface like any other (edge: first cross-section,
-    rail, last cross-section, rail), the middle cross-sections shape it as lines on it."""
+    rail, last cross-section, rail), the middle cross-sections shape it as lines on it. (Until 2026-11-24 a single
+    selected piece stood for its whole line; now a piece is a piece: tests/test_loft.py.)"""
     from sketch_machine import components as comp
     from sketch_machine.scene import PatchSurface
     sc = h.sc
@@ -712,8 +713,8 @@ def test_open_loft_becomes_a_curve_surface_with_whole_lines(h: H):
     segs = comp.segments(mid)
     h.v.set_select_mode(True)
     h.v.ws.component = "edge"
-    h.v.edge_selection = [("line", st, rows[0].id), ("line", st, rows[2].id)]
-    h.v.seg_selection = [("seg", st, mid.id, *segs[1])]  # only the middle piece selected
+    assert len(segs) == 3
+    h.v.edge_selection = [("line", st, rows[0].id), ("line", st, mid.id), ("line", st, rows[2].id)]
     h.v.do_loft()
     surf = sc.surfaces[-1]
     assert isinstance(surf, PatchSurface), f"open loft is {type(surf).__name__}, not a curve surface"

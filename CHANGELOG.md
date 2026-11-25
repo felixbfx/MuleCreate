@@ -1,5 +1,18 @@
 # Changelog
 
+## Mule Create Alpha 1.8 – v0.99.289 (2026-11-25)
+
+- **Loft (Shift+F) uses only the selected pieces.** When you select single pieces of lines and loft them, the
+  surface now runs between exactly those pieces. Before, it always connected the whole lines.
+- **Copy between scenes and between two Mule windows.** Ctrl+C on objects or groups, Ctrl+V with the mouse over the
+  Outliner – in another scene of the same window or in a second running Mule. A line object takes its surfaces
+  along, a group everything below it. Names stay as they are when they are free in the target scene. Large groups
+  take a few seconds.
+- **Note boards: images copy across scenes and windows.** Text, strokes and backdrops already did; images arrived
+  as "missing in this scene", now their data travels along.
+- **Reference objects for comparing sizes:** File → Insert reference object puts a person (1.80 m), a car (4.5 m)
+  or a two-storey house into the scene, in real size. They ship with Mule.
+
 ## Mule Create Alpha 1.7 – v0.99.285 (2026-11-17)
 
 - **Start: the logo shows right away.** The head draws itself while Mule is still loading and waits with

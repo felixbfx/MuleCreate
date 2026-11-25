@@ -231,6 +231,16 @@ EN = {
         "Save &as…",
     "Geometrie &importieren…":
         "&Import geometry…",
+    "&Referenzobjekt einfügen":
+        "Insert &reference object",
+    "Mensch 1,80 m":
+        "Person 1.80 m",
+    "Auto 4,5 m":
+        "Car 4.5 m",
+    "Einfamilienhaus, zwei Stockwerke":
+        "Detached house, two storeys",
+    "Referenzobjekt eingefügt: {0} ({1:.2f} × {2:.2f} × {3:.2f} m)":
+        "Reference object inserted: {0} ({1:.2f} × {2:.2f} × {3:.2f} m)",
     "Sketch &Brief exportieren…":
         "Export Sketch &Brief…",
     "Startanimation":

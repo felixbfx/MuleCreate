@@ -14,6 +14,22 @@ BIBLE_NAME = os.path.join("bible", "sketch_machine_bible.md")
 LOG_NAME = "mule.log"
 
 
+REFERENCE_DIR = os.path.join(ROOT, "sketch_machine", "assets", "reference")  # reference objects (person, car, house)
+REFERENCES = (("person_1m80", "Mensch 1,80 m"), ("car", "Auto 4,5 m"), ("house", "Einfamilienhaus, zwei Stockwerke"))
+
+
+def reference_path(path):
+    """A reference object from another Mule folder (update, other computer): the one of this Mule; otherwise path."""
+    if os.path.isfile(path):
+        return path
+    parts = path.replace("\\", "/").split("/")
+    if len(parts) >= 3 and parts[-3:-1] == ["assets", "reference"]:
+        own = os.path.join(REFERENCE_DIR, parts[-1])
+        if os.path.isfile(own):
+            return own
+    return path
+
+
 def doc_path(*parts):
     """Documentation next to the program: in the repo its root, installed the folder of Mule.exe (docs/,
     AI_HANDBOOK.md – the release copies them there)."""

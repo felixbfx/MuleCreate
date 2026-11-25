@@ -1,0 +1,1 @@
+This is an image brief, not a build brief: nothing is built in 3D. Work in the brief folder {{brief_dir}}. Read CLAUDE.md and project.md there and do what they say for “{{project_name}}”: first the look paragraph and the lines per camera with me, then build the prompts, then the pictures step by step. I pick after every step.

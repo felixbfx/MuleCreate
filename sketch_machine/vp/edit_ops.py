@@ -1,6 +1,7 @@
 """Undo/redo, set scene, copy/paste/duplicate, group."""
 from .common import *  # noqa: F401,F403
 from ..i18n import tr
+from PySide6.QtCore import QByteArray, QMimeData
 
 
 class EditOpsMixin:
@@ -63,13 +64,31 @@ class EditOpsMixin:
         parts = [tr("{0} Objekt(e)").format(len(objs))] if objs else []
         parts += [tr("{0} Linie(n)").format(len(refs))] if refs else []
         if clip is None:
+            self._to_system_clipboard()
             self.status_changed.emit(tr("Kopiert: ") + ", ".join(parts))
         return True
+
+    def _to_system_clipboard(self):
+        """Also into the system clipboard, so that a second Mule window can paste it (clipboard.MIME)."""
+        try:
+            raw = self.ws.clipboard.to_bytes(self.scene)
+        except Exception:  # noqa: BLE001 – within this window the copy still works
+            return
+        mime = QMimeData()
+        mime.setData(clipboard.MIME, QByteArray(raw))
+        QApplication.clipboard().setMimeData(mime)
+
+    def _from_system_clipboard(self):
+        """Copy of another Mule window, if it is the latest thing in the system clipboard; otherwise None."""
+        mime = QApplication.clipboard().mimeData()
+        if mime is None or not mime.hasFormat(clipboard.MIME):
+            return None
+        return Clipboard.from_bytes(mime.data(clipboard.MIME))
 
     def paste(self, mode="elements", clip=None, duplicate=False):
         """Paste at the same place; the pasted items are then selected, translate gizmo active.
         mode "elements" (viewport): lines into the active stroke object, "objects" (outliner): new objects."""
-        clip = clip or self.ws.clipboard
+        clip = clip or self._from_system_clipboard() or self.ws.clipboard
         if clip.empty:
             self.status_changed.emit(tr("Einfügen: Zwischenablage ist leer."))
             return

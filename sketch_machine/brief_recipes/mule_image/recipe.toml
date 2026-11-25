@@ -1,0 +1,22 @@
+# Brief recipe for the picture step before 3D: look pictures from hero cameras. Format: docs/recipes.md
+id = "mule_image"
+name = "Mule Image"
+version = "v0.1"
+author = "Mule Create"
+description = "Look pictures before 3D: ready prompts per hero camera, close views first, then wide views. Works by hand in a chat or with Claude and an image tool. Nothing is built."
+made_for = ["environments", "objects", "creatures", "vehicles", "buildings"]
+size = "any"
+harness = "any"
+brief_interface = 1
+forked_from = ""
+changes = "CHANGES.md"
+
+[templates]
+start = "templates/start.md"
+project = "templates/project.md"
+brief_head = "templates/brief_head.md"
+look = "templates/look.md"
+
+[files]
+"CLAUDE.md" = "brief/CLAUDE.md"
+"image/" = "brief/image/"

@@ -641,3 +641,61 @@ def _make_loft_any(h: H, sections):
     del h.v._track_pick_order
     sc.sync_lofts()
     return sc.surfaces[-1], lines
+
+
+def _rings_with_points(h: H):
+    """Two rings (closed lines) with points at every quarter, like the hull rings of the harbor submarine."""
+    sc = h.sc
+    sc.new_stroke()
+    t = np.linspace(0, 2 * np.pi, 121)
+    rings = []
+    for z, r in ((0.0, 1.0), (2.0, 1.6)):
+        sc.add_curve(np.stack([r * np.cos(t), r * np.sin(t), np.full_like(t, z)], axis=1), None)
+        rings.append(sc.curves[-1])
+        for k in (30, 60, 90):
+            components.insert_point(rings[-1], k, 0.0)
+    h.v._changed()
+    network.sync(sc)
+    h.v.set_select_mode(True)
+    h.v.ws.component = "edge"
+    return rings
+
+
+def test_loft_through_selected_pieces_takes_only_the_pieces(h: H):
+    """Artist 2026-11-24 (harbor, recording 15:49): one piece each of two rings selected, Shift+F – the loft took both
+    whole rings and filled a twisted cone. A selected piece is the cross-section: the surface spans only between the
+    two pieces. One Ctrl+Z takes back the surface and the split."""
+    sc = h.sc
+    rings = _rings_with_points(h)
+    st = sc.owner_of(rings[0]).id
+    assert components.segments(rings[0])[1] == (30, 60)
+    lines_before = len(sc.curves)
+    h.v.edge_selection = []
+    h.v.seg_selection = [("seg", st, c.id, 30, 60) for c in rings]  # the quarter from 90° to 180°: x <= 0, y >= 0
+    h.v.do_loft()
+    assert len(sc.surfaces) == 1, "one loft"
+    h.v._changed()
+    verts = sc.surfaces[-1].fill_mesh()[0]
+    assert verts[:, 0].max() < 0.02 and verts[:, 1].min() > -0.02, \
+        f"surface leaves the selected quarter: x up to {verts[:, 0].max():.2f}, y down to {verts[:, 1].min():.2f}"
+    assert verts[:, 0].min() < -1.5 and verts[:, 1].max() > 1.5, "surface reaches over the whole piece"
+    assert np.ptp(verts[:, 2]) > 1.99, "from ring to ring"
+    h.v.undo()
+    assert not sc.surfaces and len(sc.curves) == lines_before, "one undo step: surface gone, rings whole again"
+
+
+def test_loft_that_fails_leaves_the_lines_unsplit(h: H):
+    """A single selected piece is no loft (two cross-sections needed): the line it belongs to stays whole."""
+    sc = h.sc
+    rings = _rings_with_points(h)
+    st = sc.owner_of(rings[0]).id
+    ids = [c.id for c in sc.curves]
+    undo = len(sc._undo)
+    seg = ("seg", st, rings[0].id, 30, 60)
+    h.v.edge_selection = []
+    h.v.seg_selection = [seg]
+    h.v.do_loft()
+    assert not sc.surfaces
+    assert [c.id for c in sc.curves] == ids, "lines unchanged"
+    assert len(sc._undo) == undo, "no undo step left behind"
+    assert h.v.seg_selection == [seg], "selection as before"

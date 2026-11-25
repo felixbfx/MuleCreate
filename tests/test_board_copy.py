@@ -110,3 +110,24 @@ def test_keyboard_shortcuts_in_board(h: H):
         assert len(_images(board)) == 1, "Ctrl+V pastes the copied image"
     finally:
         _close(h, board)
+
+
+def test_copy_images_into_another_scene(h: H):
+    """Board elements into another scene (or Mule window): the image data travels in the clipboard."""
+    from sketch_machine.scene import Scene
+    note, other, board, (a, b) = _filled_board(h)
+    try:
+        board.gscene.clearSelection()
+        a.setSelected(True)
+        assert board.copy_selection()
+        _close(h, board)
+        h.v.set_scene(Scene())  # new scene: no image data of the old one
+        board = board_for(h.v)
+        board.open(h.v, h.sc.global_note.id)
+        h.pump(0.05)
+        board.insert_mime(QApplication.clipboard().mimeData(), QPointF(0, 0))
+        got = _images(board)
+        assert len(got) == 1 and got[0].file == a.file and not got[0].missing
+        assert h.sc.asset_bytes(a.file) is not None, "the image is stored in the new scene"
+    finally:
+        _close(h, board)

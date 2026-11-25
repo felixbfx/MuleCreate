@@ -308,7 +308,7 @@ def test_bad_recipes_are_shown_but_not_usable(h=None):
         open(os.path.join(root, name, "recipe.toml"), "w", encoding="utf-8").write(toml)
         open(os.path.join(root, name, "s.md"), "w", encoding="utf-8").write("ok\n")
         open(os.path.join(root, name, "b.md"), "w", encoding="utf-8").write("{{#a}}open\n")
-    got = {r.path.split(os.sep)[-1]: r for r in recipes.available()[1:]}
+    got = {r.path.split(os.sep)[-1]: r for r in recipes.available()[1:] if not r.shipped}
     assert set(got) == set(cases)
     for name, r in got.items():
         assert not r.ok, f"{name} should not be usable"
@@ -591,14 +591,15 @@ def test_brief_md_holds_only_content_with_an_own_recipe(h: H):
 def test_dialog_chooses_the_recipe(h: H):
     root = _user()
     dlg = BriefDialog(None, {"task": "x"}, 0, None, "a", "C:/x/a_brief")
-    assert dlg.recipe_combo.count() == 1 and dlg.recipe().id == "default" and "recipe" not in dlg.values()
+    n_own = 1 + len([r for r in recipes.available() if r.shipped])  # Mule Default and what else comes with Mule
+    assert dlg.recipe_combo.count() == n_own and dlg.recipe().id == "default" and "recipe" not in dlg.values()
     assert "Hook" in dlg.recipe_info.text() and "nicht von Mule geprüft" not in dlg.recipe_info.text()
     _recipe(root)
     os.makedirs(os.path.join(root, "zz_broken"))
     open(os.path.join(root, "zz_broken", "recipe.toml"), "w").write('id="zz"\n')
     dlg = BriefDialog(None, {"task": "x", "recipe": "lean"}, 0, None, "a", "C:/x/a_brief")
-    assert dlg.recipe_combo.count() == 3 and dlg.recipe().id == "lean" and dlg.values()["recipe"] == "lean"
-    assert not dlg.recipe_combo.model().item(2).isEnabled(), "broken recipe cannot be chosen"
+    assert dlg.recipe_combo.count() == n_own + 2 and dlg.recipe().id == "lean" and dlg.values()["recipe"] == "lean"
+    assert not dlg.recipe_combo.model().item(dlg.recipe_combo.count() - 1).isEnabled(), "broken recipe cannot be chosen"
     info = dlg.recipe_info.text()
     assert "One builder, no QC." in info and "Tester" in info and "1 Hook" in info and "Netz" in info
     assert dlg.prompt.toPlainText().startswith("Schlank:"), "the sentence follows the recipe"
@@ -616,3 +617,21 @@ def test_dialog_chooses_the_recipe(h: H):
     got = missing._import_recipe(z, ask=False)
     assert got is not None and got.id == "lean" and missing.recipe().id == "lean", "imported recipe is chosen"
     _user()
+
+
+def test_shipped_image_recipe_installs(h=None):
+    """„Mule Image“ comes with Mule (brief_recipes/): listed, usable, and an install puts its script and its texts
+    into the brief folder – nothing of Mule's own content is touched."""
+    import tempfile
+    r = recipes.find("mule_image")
+    assert r is not None and r.ok and r.shipped and not r.builtin, getattr(r, "problems", "missing")
+    assert [x.id for x in recipes.available()][0] == recipes.DEFAULT_ID
+    with tempfile.TemporaryDirectory() as tmp:
+        b, w = os.path.join(tmp, "brief"), os.path.join(tmp, "work")
+        os.makedirs(b), os.makedirs(w)
+        written = recipes.install(r, b, w, {"project_name": "t", "brief_dir": b, "work_dir": w}, fresh_conf=True)
+        assert "image/build_prompts.py" in written and "CLAUDE.md" in written, written
+        assert os.path.isfile(os.path.join(b, "image", "parts", "wide.txt"))
+        assert (recipes.read_lock(b) or {}).get("id") == "mule_image"
+    for key in ("start", "project", "brief_head", "look"):
+        assert r.template(key), key

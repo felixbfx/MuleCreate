@@ -252,6 +252,9 @@ class MainWindow(QMainWindow):
             action = QAction(text, self, shortcut=shortcut)
             action.triggered.connect(slot)
             file_menu.addAction(action)
+        ref_menu = file_menu.addMenu(tr("&Referenzobjekt einfügen"))  # sizes to compare: person, car, house
+        for name, label in paths.REFERENCES:
+            ref_menu.addAction(tr(label), lambda _=False, name=name: self.import_reference(name))
         export_menu = file_menu.addMenu(tr("E&xportieren"))
         for text, shortcut, slot in (
             (tr("Szene als &USD…"), QKeySequence("Ctrl+Shift+E"), self.export_usd),
@@ -1510,6 +1513,18 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(tr("Importiert: {0} ({1:,} Dreiecke").format(mesh.name, tris)
                                          + (tr(", {0} Meshes in der Hierarchie der Datei)").format(len(parts)) if len(parts) > 1 else ")"),
                                          5000)
+
+    def import_reference(self, name):
+        """Reference object in real size (person 1.80 m, car, house) at the origin – only for comparing sizes."""
+        path = os.path.join(paths.REFERENCE_DIR, name + ".usda")
+        try:
+            mesh = self.viewport.import_mesh(path)
+        except Exception as exc:
+            QMessageBox.warning(self, tr("Import fehlgeschlagen"), f"{os.path.basename(path)}:\n{exc}")
+            return
+        lo, hi = mesh.world_bounds()
+        self.statusBar().showMessage(tr("Referenzobjekt eingefügt: {0} ({1:.2f} × {2:.2f} × {3:.2f} m)").format(
+            mesh.name, *(hi - lo)), 5000)
 
     def save_scene(self, quiet=False):
         """Save; quiet: without a window - an error comes back as OSError (MCP: a dialog blocked the call)."""
