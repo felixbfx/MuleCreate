@@ -75,12 +75,31 @@ def is_core(path):
         return any(line.startswith('LEVEL = "core"') for line in f)
 
 
+def _neutral_scale():
+    """Tests read pixels at widget coordinates (device pixel ratio 1, as on the Windows machines). On a Retina Mac the
+    screen has ratio 2: then the windows run with QT_SCALE_FACTOR = 1/ratio, so one widget pixel is one image pixel
+    again. Returns the factor as text, or None (ratio 1, other systems, or already set)."""
+    if sys.platform != "darwin" or "QT_SCALE_FACTOR" in os.environ:
+        return None
+    code = ("from PySide6.QtGui import QGuiApplication; a = QGuiApplication([]); "
+            "print(a.primaryScreen().devicePixelRatio())")
+    try:
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60).stdout
+        ratio = float(out.strip().splitlines()[-1])
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        return None
+    return None if abs(ratio - 1.0) < 1e-3 or ratio <= 0 else "%.6g" % (1.0 / ratio)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if "--child" in sys.argv:
         run_file(args[0], args[1])
         return 0
     env = dict(os.environ, PYTHONPATH=ROOT, PYTHONIOENCODING="utf-8")
+    scale = _neutral_scale()
+    if scale:
+        env["QT_SCALE_FACTOR"] = scale
     if "--update-baseline" in sys.argv:
         env["SKETCH_UPDATE_BASELINE"] = "1"
     if "--gross" in sys.argv:

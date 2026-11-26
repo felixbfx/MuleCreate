@@ -1,4 +1,4 @@
-"""OpenGL rendering (moderngl): shaded meshes, planes with depth, GPU picking.
+"""OpenGL (moderngl) and native Metal rendering: shaded meshes, planes with depth, GPU picking.
 
 The viewport draws strokes and gizmos afterwards via QPainter as an overlay on top.
 Picking: meshes are rendered into an invisible buffer that stores per pixel the
@@ -1353,6 +1353,40 @@ void main() {
 """
 
 
+PROGRAMS = {
+    'mesh': (MESH_VS, MESH_FS),
+    'pick': (PICK_VS, PICK_FS),
+    'wire': (WIRE_VS, WIRE_FS),
+    'flat': (FLAT_VS, FLAT_FS),
+    'infinite': (FLAT_VS, INFINITE_FS),
+    'ribbon': (RIBBON_VS, RIBBON_FS),
+    'material': (SURFACE_VS, MATERIAL_FS),
+    'occl_surface': (SURFACE_VS, OCCL_SURF_FS),
+    'occl_acc_surface': (SURFACE_VS, OCCL_ACC_SURF_FS),
+    'shadow_surface': (SURFACE_VS, SHADOW_LINE_FS),
+    'occl_mesh': (PICK_VS, OCCL_MESH_FS),
+    'occl_acc_mesh': (PICK_VS, OCCL_ACC_MESH_FS),
+    'block_shade': (BLOCK_VS, BLOCK_MESH_FS),
+    'block_pick': (BLOCK_VS, BLOCK_PICK_FS),
+    'block_occl': (BLOCK_VS, BLOCK_OCCL_FS),
+    'block_occl_acc': (BLOCK_VS, BLOCK_OCCL_ACC_FS),
+    'picture': (FLAT_VS, PICTURE_FS.replace('%OCCL%', OCCL_LIB)),
+    'shadow_line': (SHADOW_LINE_VS, SHADOW_LINE_FS),
+    'paper': (PAPER_VS, PAPER_FS),
+    'cap': (CAP_VS, CAP_FS),
+    'pick_gather': (PICK_GATHER_VS, PICK_GATHER_FS),
+    'point_vis': (POINT_VIS_VS, POINT_VIS_FS),
+}
+
+
+def program(ctx, name):
+    """Keep the OpenGL shader path; Metal loads the equivalent precompiled program by name."""
+    if getattr(ctx, "native_metal", False):
+        return ctx.program(name)
+    vs, fs = PROGRAMS[name]
+    return ctx.program(vertex_shader=vs, fragment_shader=fs)
+
+
 _NORMALS_CACHE = {}  # id(vertices) -> (vertices, normals): drawing surfaces come cached
 
 
@@ -1824,27 +1858,27 @@ class Renderer:
         self._gl = gl
         self._depth_mask = gl.glDepthMask
         self._msaa_fbo, self._msaa_size = None, None
-        self.mesh_prog = ctx.program(vertex_shader=MESH_VS, fragment_shader=MESH_FS)
-        self.pick_prog = ctx.program(vertex_shader=PICK_VS, fragment_shader=PICK_FS)
-        self.wire_prog = ctx.program(vertex_shader=WIRE_VS, fragment_shader=WIRE_FS)
-        self.flat_prog = ctx.program(vertex_shader=FLAT_VS, fragment_shader=FLAT_FS)
-        self.inf_prog = ctx.program(vertex_shader=FLAT_VS, fragment_shader=INFINITE_FS)
+        self.mesh_prog = program(ctx, 'mesh')
+        self.pick_prog = program(ctx, 'pick')
+        self.wire_prog = program(ctx, 'wire')
+        self.flat_prog = program(ctx, 'flat')
+        self.inf_prog = program(ctx, 'infinite')
         self._infinite = []  # infinite planes of this frame (base grid, active plane), see viewport
-        self.ribbon_prog = ctx.program(vertex_shader=RIBBON_VS, fragment_shader=RIBBON_FS)
-        self.material_prog = ctx.program(vertex_shader=SURFACE_VS, fragment_shader=MATERIAL_FS)
-        self.occl_surf_prog = ctx.program(vertex_shader=SURFACE_VS, fragment_shader=OCCL_SURF_FS)
-        self.occl_acc_surf_prog = ctx.program(vertex_shader=SURFACE_VS, fragment_shader=OCCL_ACC_SURF_FS)
-        self.shadow_surf_prog = ctx.program(vertex_shader=SURFACE_VS, fragment_shader=SHADOW_LINE_FS)
+        self.ribbon_prog = program(ctx, 'ribbon')
+        self.material_prog = program(ctx, 'material')
+        self.occl_surf_prog = program(ctx, 'occl_surface')
+        self.occl_acc_surf_prog = program(ctx, 'occl_acc_surface')
+        self.shadow_surf_prog = program(ctx, 'shadow_surface')
         self._surface_vaos = {}  # program -> vao on the surface buffer
         self._surfaces = []  # surfaces of this frame (dicts, see render)
         self.material_scale = 1.0  # global material scale (viewport)
         # hold the shadow map fixed (viewport: while a gizmo drag runs). Re-rendering it costs per frame with the
         # scene (all strokes, all surfaces); during a drag the frame rate counts, the shadows follow on release.
         self.shadow_hold = False
-        self.occl_mesh_prog = ctx.program(vertex_shader=PICK_VS, fragment_shader=OCCL_MESH_FS)
-        self.occl_acc_mesh_prog = ctx.program(vertex_shader=PICK_VS, fragment_shader=OCCL_ACC_MESH_FS)
-        self.block_progs = {name: ctx.program(vertex_shader=BLOCK_VS, fragment_shader=fs) for name, fs in (
-            ("shade", BLOCK_MESH_FS), ("pick", BLOCK_PICK_FS), ("occl", BLOCK_OCCL_FS), ("occl_acc", BLOCK_OCCL_ACC_FS))}
+        self.occl_mesh_prog = program(ctx, 'occl_mesh')
+        self.occl_acc_mesh_prog = program(ctx, 'occl_acc_mesh')
+        self.block_progs = {name: program(ctx, "block_" + name)
+                            for name in ("shade", "pick", "occl", "occl_acc")}
         self._block = None  # _MeshBlock of the imported meshes (or None)
         self._block_memo = None  # (input list, list with block entry) - same list when rotating
         self._occl = None  # (fbo, coverage texture, size, depth buffer)
@@ -1855,9 +1889,9 @@ class Renderer:
         self._aid_pass = 1.0  # drawing aids: 0 below the surfaces, 1 above them
         self.pictures = []  # projected images of this frame (pictures.draw_list)
         self._picture_textures = {}
-        self.picture_prog = ctx.program(vertex_shader=FLAT_VS, fragment_shader=PICTURE_FS.replace("%OCCL%", OCCL_LIB))
+        self.picture_prog = program(ctx, 'picture')
         self._occl_dense_on = True  # check the opacity of the frontmost layer (off while it is being created)
-        self.shadow_line_prog = ctx.program(vertex_shader=SHADOW_LINE_VS, fragment_shader=SHADOW_LINE_FS)
+        self.shadow_line_prog = program(ctx, 'shadow_line')
         self.light = None  # light mode: dict(dir, col, sky, away, shadow) or None
         self._shadow = None  # (fbo, depth texture, size)
         self._shadow_key = None
@@ -1868,9 +1902,9 @@ class Renderer:
         # ... and only those where position or width of a stroke changed: the shadow map depends on that. A
         # pure color change (hover, selection) casts no different shadow and does not re-render it.
         self._stroke_geo_rev = 0
-        self.paper_prog = ctx.program(vertex_shader=PAPER_VS, fragment_shader=PAPER_FS)
+        self.paper_prog = program(ctx, 'paper')
         self._paper_vao = ctx.vertex_array(self.paper_prog, [])
-        self.cap_prog = ctx.program(vertex_shader=CAP_VS, fragment_shader=CAP_FS)
+        self.cap_prog = program(ctx, 'cap')
         self._caps = None  # (vbo, vao, capacity)
         self._surface_buf = None  # (vbo, vao, capacity)
         self._slot_buf = None  # (vbo, capacity, corner counts per surface): number of the surface per corner
@@ -3218,7 +3252,7 @@ class Renderer:
             return np.zeros((n, 4), dtype="f4"), np.zeros(n, dtype=np.int64)
         ctx = self.ctx
         if getattr(self, "_gather", None) is None:
-            prog = ctx.program(vertex_shader=PICK_GATHER_VS, fragment_shader=PICK_GATHER_FS)
+            prog = program(ctx, 'pick_gather')
             self._gather = [prog, None, None, None, 0]  # prog, vbo, vao, fbo, capacity
         g = self._gather
         if n > g[4]:
@@ -3256,7 +3290,7 @@ class Renderer:
             return np.ones(n, bool)
         ctx = self.ctx
         if getattr(self, "_vis", None) is None:
-            self._vis = [ctx.program(vertex_shader=POINT_VIS_VS, fragment_shader=POINT_VIS_FS), None, None, None, 0]
+            self._vis = [program(ctx, 'point_vis'), None, None, None, 0]
         g = self._vis
         if n > g[4]:
             for res in g[1:4]:

@@ -209,8 +209,7 @@ def test_paint_stroke_does_not_rebuild_lists_and_outliner_needlessly(h: H):
     try:
         h.pump(0.05)
         rebuilt.clear()
-        from PySide6.QtOpenGLWidgets import QOpenGLWidget
-        frame = lambda: QOpenGLWidget.grabFramebuffer(h.v)
+        frame = lambda: h.v.gpu_grab()
         frame()
         calls.clear()
         pts = [h.scrf([x, 2.0, 0]) for x in np.linspace(-1, 1, 12)]

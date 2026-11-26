@@ -2,7 +2,6 @@
 import numpy as np
 from PySide6.QtCore import QEvent, QPointF
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
 from tests.harness import H, Qt
 from tests.test_material import _square
@@ -19,7 +18,7 @@ def _orbit(h: H, steps=6):
     send(QEvent.MouseButtonPress, QPointF(500, 400), Qt.LeftButton)
     for i in range(steps):
         send(QEvent.MouseMove, QPointF(500 + 6 * (i + 1), 400 + 2 * i), Qt.LeftButton)
-        img = QOpenGLWidget.grabFramebuffer(v)
+        img = v.gpu_grab()
     assert v._mode == "orbit", f"dragging with Alt should orbit (mode {v._mode})"
     return img, lambda: send(QEvent.MouseButtonRelease, QPointF(540, 410), Qt.NoButton)
 
@@ -39,7 +38,7 @@ def test_orbiting_does_not_rebuild_strokes_and_surfaces(h: H):
     v._stroke_draw_list = lambda: calls.append("strokes") or orig[1]()
     sc.sync_lofts = lambda *a, **k: calls.append("sync") or orig[2](*a, **k)
     try:
-        QOpenGLWidget.grabFramebuffer(v)  # last frame before orbiting
+        v.gpu_grab()  # last frame before orbiting
         calls.clear()
         cached, release = _orbit(h)
         # once on engaging (click, mode switch), after that in none of the 6 frames
@@ -68,11 +67,11 @@ def test_engaging_and_releasing_the_camera_rebuilds_nothing(h: H):
     v._scene_stroke_list = lambda: calls.append("strokes") or orig[1]()
     sc.sync_lofts = lambda *a, **k: calls.append("sync") or orig[2](*a, **k)
     try:
-        QOpenGLWidget.grabFramebuffer(v)
+        v.gpu_grab()
         calls.clear()
         _, release = _orbit(h)
         release()
-        QOpenGLWidget.grabFramebuffer(v)
+        v.gpu_grab()
         assert not calls, f"engaging/releasing the camera rebuilt: {calls}"
         assert v._mode is None, f"no mode any more after release ({v._mode})"
     finally:
@@ -93,7 +92,7 @@ def test_hover_rebuilds_only_on_change(h: H):
 
     def move(p):
         h.app.sendEvent(v, QMouseEvent(QEvent.MouseMove, p, p, Qt.NoButton, Qt.NoButton, Qt.NoModifier))
-        return QOpenGLWidget.grabFramebuffer(v)
+        return v.gpu_grab()
 
     on = QPointF(h.scr(line.points[10]))
     off = on + QPointF(0, 120)
@@ -124,7 +123,7 @@ def test_drawing_rebuilds_only_the_stroke(h: H):
     sc.activate(sc.presets[1] if len(sc.presets) > 1 else sc.presets[0])
     sc.new_stroke()
     v._changed()
-    QOpenGLWidget.grabFramebuffer(v)
+    v.gpu_grab()
     n_lines = len(h.curves())
     calls = []
     orig = (v._surface_draw_list, v._scene_stroke_list, sc.sync_lofts)
@@ -138,7 +137,7 @@ def test_drawing_rebuilds_only_the_stroke(h: H):
         QTest.mousePress(v, Qt.LeftButton, Qt.NoModifier, pts[0].toPoint())
         for p in pts[1:]:
             h.move(p, Qt.LeftButton)
-            cached = QOpenGLWidget.grabFramebuffer(v)
+            cached = v.gpu_grab()
         assert v._mode == "draw", f"stroke is running ({v._mode})"
         many = {k: calls.count(k) for k in set(calls) if calls.count(k) > 2}
         assert not many, f"rebuilt every frame while drawing: {many}"
@@ -147,7 +146,7 @@ def test_drawing_rebuilds_only_the_stroke(h: H):
         assert n == 0, f"image in the middle of the stroke differs from the freshly built one ({n} pixels)"
         QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, pts[-1].toPoint())
         h.pump(0.02)
-        after = QOpenGLWidget.grabFramebuffer(v)
+        after = v.gpu_grab()
         assert len(h.curves()) == n_lines + 1, "the stroke is a line of the scene"
         assert h.diff(after, v.grabFramebuffer(), threshold=2) == 0, "after release: image = freshly built"
     finally:

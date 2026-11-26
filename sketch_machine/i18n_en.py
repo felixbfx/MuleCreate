@@ -877,6 +877,8 @@ EN = {
         "World",
     "{0}  |  Stroke: {1}  |  Stift: {2}  |  Auswahl: {3}  |  Werkzeug: {4} [{5}]  |  A Stift · D Radierer · F: Fläche einfärben · Tab: Edit · N: Notizen · Strg: einrasten · P Gerade durchs Mesh":
         "{0}  |  Stroke: {1}  |  Pen: {2}  |  Selection: {3}  |  Tool: {4} [{5}]  |  A pen · D eraser · F: color surface · Tab: Edit · N: notes · Ctrl: snap · P straight through the mesh",
+    "Metal 4 nicht verfügbar:\n{0}":
+        "Metal 4 not available:\n{0}",
     "OpenGL 3.3 nicht verfügbar:\n{0}":
         "OpenGL 3.3 not available:\n{0}",
     "Split links/rechts":

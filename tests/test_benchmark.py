@@ -10,7 +10,6 @@ BEKANNT lists, per action, the counters that still grow with the scene today. Th
 import os
 
 import numpy as np
-from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
 from sketch_machine import counters, network
 from tests.harness import H
@@ -58,7 +57,7 @@ def _szene(h: H, n):
 
 
 def _bild(h: H):
-    QOpenGLWidget.grabFramebuffer(h.v)  # one frame as in the app (h.grab forces a rebuild of all lists)
+    h.v.gpu_grab()  # one frame as in the app (h.grab forces a rebuild of all lists)
 
 
 def _kamera(h, objs, i):
