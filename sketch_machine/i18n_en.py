@@ -1946,4 +1946,10 @@ EN = {
         'The recipe „{0}“ is not installed or not usable right now. Export with Mule Default?',
     'Review-Runde: das Recipe des Briefs „{0}“ ist installiert, aber gerade nicht nutzbar ({1}) – die Runde bringt keine neue Version mit.':
         "Review round: the brief's recipe „{0}“ is installed but not usable right now ({1}) – the round brings no new version.",
+    "Transformieren":
+        "Transform",
+    "Achsenmodus":
+        "Axis mode",
+    "Drehen":
+        "Rotate",
 }
